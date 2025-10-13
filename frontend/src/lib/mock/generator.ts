@@ -1,5 +1,5 @@
 /**
- * Mock data generator for real-time risk monitoring
+ * Mock data generator for RiskPulse
  * Generates realistic OHLCV, VaR, positions, and alerts
  */
 

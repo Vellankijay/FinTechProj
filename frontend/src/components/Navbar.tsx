@@ -18,7 +18,7 @@ export default function Navbar() {
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 font-semibold text-lg">
           <Activity className="h-6 w-6 text-accent" />
-          <span>Risk Monitor</span>
+          <span>RiskPulse</span>
         </Link>
 
         {/* Navigation Links */}
@@ -37,14 +37,6 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
-        </div>
-
-        {/* Auth Actions */}
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm">
-            Sign in
-          </Button>
-          <Button size="sm">Get started</Button>
         </div>
       </div>
     </nav>

@@ -16,12 +16,12 @@ const AllProviders = ({ children }: { children: React.ReactNode }) => (
 describe('Smoke Tests', () => {
   it('renders Navbar without crashing', () => {
     render(<Navbar />, { wrapper: AllProviders });
-    expect(screen.getByText(/Risk Monitor/i)).toBeInTheDocument();
+    expect(screen.getByText(/RiskPulse/i)).toBeInTheDocument();
   });
 
   it('renders Footer without crashing', () => {
     render(<Footer />, { wrapper: AllProviders });
-    expect(screen.getByText(/Real-time risk monitoring/i)).toBeInTheDocument();
+    expect(screen.getByText(/Real-time risk intelligence/i)).toBeInTheDocument();
   });
 
   it('renders Home page without crashing', () => {

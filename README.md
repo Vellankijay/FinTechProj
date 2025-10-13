@@ -1,7 +1,7 @@
-# 🧠 Real-Time Risk Monitoring System for Electronic Trading
+# 🧠 RiskPulse - Real-Time Risk Intelligence for Electronic Trading
 
 ## 🎯 Goal / Purpose
-To build a **real-time risk monitoring platform** that continuously tracks, detects, and mitigates financial and operational risks during live electronic trading — designed for both **buy-side (portfolio managers)** and **sell-side (trading desks)** users.
+To build **RiskPulse**, a **real-time risk intelligence platform** that continuously tracks, detects, and mitigates financial and operational risks during live electronic trading — designed for both **buy-side (portfolio managers)** and **sell-side (trading desks)** users.
 
 ---
 

@@ -12,10 +12,10 @@ export default function Footer() {
           <div className="space-y-4">
             <div className="flex items-center gap-2 font-semibold text-lg">
               <Activity className="h-6 w-6 text-accent" />
-              <span>Risk Monitor</span>
+              <span>RiskPulse</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Real-time risk monitoring for electronic trading environments.
+              Real-time risk intelligence for electronic trading environments.
             </p>
           </div>
 
@@ -78,7 +78,7 @@ export default function Footer() {
         </div>
 
         <div className="mt-12 border-t border-border/40 pt-8 text-center text-sm text-muted-foreground">
-          <p>&copy; {currentYear} Risk Monitor. All rights reserved.</p>
+          <p>&copy; {currentYear} RiskPulse. All rights reserved.</p>
         </div>
       </div>
     </footer>

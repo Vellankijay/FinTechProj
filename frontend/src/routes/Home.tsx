@@ -4,15 +4,6 @@ import { ArrowRight, TrendingUp, Shield, Zap, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function Home() {
-  const brands = [
-    'Bloomberg',
-    'Goldman Sachs',
-    'JPMorgan',
-    'Morgan Stanley',
-    'Citadel',
-    'Two Sigma',
-  ];
-
   const features = [
     {
       icon: TrendingUp,
@@ -79,25 +70,6 @@ export default function Home() {
         <div className="absolute inset-0 -z-10 overflow-hidden">
           <div className="absolute top-0 left-1/4 h-96 w-96 rounded-full bg-accent/20 blur-3xl" />
           <div className="absolute bottom-0 right-1/4 h-96 w-96 rounded-full bg-primary/20 blur-3xl" />
-        </div>
-      </section>
-
-      {/* Brand Row */}
-      <section className="border-y border-border/40 bg-muted/30 py-12">
-        <div className="container mx-auto px-4">
-          <p className="text-center text-sm text-muted-foreground mb-8">
-            Trusted by leading financial institutions
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12">
-            {brands.map((brand) => (
-              <div
-                key={brand}
-                className="text-lg font-semibold text-muted-foreground/60 hover:text-foreground transition-colors"
-              >
-                {brand}
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
