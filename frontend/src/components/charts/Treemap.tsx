@@ -10,7 +10,12 @@ interface TreemapProps {
 function CustomContent(props: any) {
   const { x, y, width, height, name, value, color } = props;
 
-  if (width < 30 || height < 30) return null;
+  // Guard against missing or invalid data
+  if (width < 30 || height < 30 || !name || value === undefined || value === null) return null;
+
+  const displayName = name && typeof name === 'string'
+    ? (name.length > 12 ? name.substring(0, 12) + '...' : name)
+    : '';
 
   return (
     <g>
@@ -21,13 +26,13 @@ function CustomContent(props: any) {
         height={height}
         style={{
           fill: color || '#3b82f6',
-          stroke: 'hsl(var(--background))',
-          strokeWidth: 2,
-          opacity: 0.9,
+          stroke: '#ffffff',
+          strokeWidth: 3,
+          opacity: 0.95,
         }}
-        className="transition-opacity hover:opacity-100"
+        className="transition-all hover:opacity-100 hover:brightness-110 cursor-pointer"
       />
-      {width > 60 && height > 40 && (
+      {width > 60 && height > 40 && displayName && (
         <>
           <text
             x={x + width / 2}
@@ -37,7 +42,7 @@ function CustomContent(props: any) {
             fontSize={Math.min(14, width / 8)}
             fontWeight="600"
           >
-            {name.length > 12 ? name.substring(0, 12) + '...' : name}
+            {displayName}
           </text>
           <text
             x={x + width / 2}
@@ -67,9 +72,19 @@ export function Treemap({ data, dataKey = 'value' }: TreemapProps) {
         <Tooltip
           formatter={(value: number) => formatCurrency(value, 0)}
           contentStyle={{
-            backgroundColor: 'hsl(var(--popover))',
-            border: '1px solid hsl(var(--border))',
+            backgroundColor: '#1e293b',
+            border: '2px solid #3b82f6',
             borderRadius: '0.5rem',
+            padding: '12px',
+            fontSize: '14px',
+            fontWeight: '600',
+            color: '#ffffff',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+          }}
+          labelStyle={{
+            color: '#ffffff',
+            fontSize: '14px',
+            fontWeight: '700',
           }}
         />
       </RechartsTreemap>

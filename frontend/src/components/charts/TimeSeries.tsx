@@ -27,18 +27,33 @@ export function TimeSeries({ data, color = '#3b82f6', showGrid = true }: TimeSer
           labelFormatter={(value) => new Date(value).toLocaleString()}
           formatter={(value: number) => [value.toFixed(2), 'Price']}
           contentStyle={{
-            backgroundColor: 'hsl(var(--popover))',
-            border: '1px solid hsl(var(--border))',
+            backgroundColor: '#1e293b',
+            border: '2px solid #3b82f6',
             borderRadius: '0.5rem',
+            padding: '12px',
+            fontSize: '14px',
+            fontWeight: '600',
+            color: '#ffffff',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+          }}
+          labelStyle={{
+            color: '#ffffff',
+            fontSize: '14px',
+            fontWeight: '700',
+            marginBottom: '8px',
+          }}
+          itemStyle={{
+            color: '#ffffff',
+            fontSize: '13px',
           }}
         />
         <Line
           type="monotone"
           dataKey="value"
           stroke={color}
-          strokeWidth={2}
+          strokeWidth={3}
           dot={false}
-          activeDot={{ r: 4 }}
+          activeDot={{ r: 6, strokeWidth: 2, stroke: '#ffffff', fill: color }}
         />
       </LineChart>
     </ResponsiveContainer>

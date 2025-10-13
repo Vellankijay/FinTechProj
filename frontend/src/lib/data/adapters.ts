@@ -18,27 +18,24 @@ import type {
 import { INDUSTRY_COLORS } from '@/types';
 import { useSettingsStore } from '@/store/useSettingsStore';
 
-export function useExposureSummary(drilldownLevel: 'global' | 'region' | 'country' = 'global') {
+export function useExposureSummary(drilldownLevel: 'global' | 'region' | 'country' = 'global', enableLiveUpdates = false) {
   const [refreshKey, setRefreshKey] = useState(0);
   const mockLiveEnabled = useSettingsStore((state) => state.mockLiveEnabled);
 
   useEffect(() => {
-    if (mockLiveEnabled) {
+    if (mockLiveEnabled && enableLiveUpdates) {
       mockDataGenerator.startLiveUpdates(true);
       const unsubscribe = mockDataGenerator.subscribe(() => {
         setRefreshKey((k) => k + 1);
       });
       return () => {
         unsubscribe();
-        mockDataGenerator.startLiveUpdates(false);
       };
-    } else {
-      mockDataGenerator.startLiveUpdates(false);
     }
-  }, [mockLiveEnabled]);
+  }, [mockLiveEnabled, enableLiveUpdates]);
 
   return useQuery({
-    queryKey: ['exposure-summary', drilldownLevel, refreshKey],
+    queryKey: ['exposure-summary', drilldownLevel, enableLiveUpdates ? refreshKey : 'snapshot'],
     queryFn: async () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
       const data = mockDataGenerator.getExposureData();
@@ -69,29 +66,28 @@ export function useExposureSummary(drilldownLevel: 'global' | 'region' | 'countr
         rawData: data,
       };
     },
-    staleTime: mockLiveEnabled ? 0 : 30000,
+    staleTime: enableLiveUpdates ? (mockLiveEnabled ? 0 : 30000) : Infinity,
   });
 }
 
-export function useVaRDistributions() {
+export function useVaRDistributions(enableLiveUpdates = false) {
   const [refreshKey, setRefreshKey] = useState(0);
   const mockLiveEnabled = useSettingsStore((state) => state.mockLiveEnabled);
 
   useEffect(() => {
-    if (mockLiveEnabled) {
+    if (mockLiveEnabled && enableLiveUpdates) {
       mockDataGenerator.startLiveUpdates(true);
       const unsubscribe = mockDataGenerator.subscribe(() => {
         setRefreshKey((k) => k + 1);
       });
       return () => {
         unsubscribe();
-        mockDataGenerator.startLiveUpdates(false);
       };
     }
-  }, [mockLiveEnabled]);
+  }, [mockLiveEnabled, enableLiveUpdates]);
 
   return useQuery({
-    queryKey: ['var-distributions', refreshKey],
+    queryKey: ['var-distributions', enableLiveUpdates ? refreshKey : 'snapshot'],
     queryFn: async () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
       const data = mockDataGenerator.getExposureData();
@@ -133,29 +129,28 @@ export function useVaRDistributions() {
 
       return { var1dayDist, var10dayDist };
     },
-    staleTime: mockLiveEnabled ? 0 : 30000,
+    staleTime: enableLiveUpdates ? (mockLiveEnabled ? 0 : 30000) : Infinity,
   });
 }
 
-export function useHeatmapData() {
+export function useHeatmapData(enableLiveUpdates = false) {
   const [refreshKey, setRefreshKey] = useState(0);
   const mockLiveEnabled = useSettingsStore((state) => state.mockLiveEnabled);
 
   useEffect(() => {
-    if (mockLiveEnabled) {
+    if (mockLiveEnabled && enableLiveUpdates) {
       mockDataGenerator.startLiveUpdates(true);
       const unsubscribe = mockDataGenerator.subscribe(() => {
         setRefreshKey((k) => k + 1);
       });
       return () => {
         unsubscribe();
-        mockDataGenerator.startLiveUpdates(false);
       };
     }
-  }, [mockLiveEnabled]);
+  }, [mockLiveEnabled, enableLiveUpdates]);
 
   return useQuery({
-    queryKey: ['heatmap-data', refreshKey],
+    queryKey: ['heatmap-data', enableLiveUpdates ? refreshKey : 'snapshot'],
     queryFn: async () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
       const data = mockDataGenerator.getExposureData();
@@ -186,7 +181,7 @@ export function useHeatmapData() {
 
       return cells;
     },
-    staleTime: mockLiveEnabled ? 0 : 30000,
+    staleTime: enableLiveUpdates ? (mockLiveEnabled ? 0 : 30000) : Infinity,
   });
 }
 

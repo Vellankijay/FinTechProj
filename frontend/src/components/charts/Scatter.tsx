@@ -25,12 +25,24 @@ function calculateRegression(data: ScatterPoint[]): { slope: number; intercept: 
 }
 
 export function Scatter({ data, xLabel = 'X Axis', yLabel = 'Y Axis', showRegression = true }: ScatterProps) {
+  // Guard against empty data
+  if (!data || data.length === 0) {
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <div className="flex items-center justify-center h-full text-muted-foreground">
+          No data available
+        </div>
+      </ResponsiveContainer>
+    );
+  }
+
   const { slope, intercept } = showRegression ? calculateRegression(data) : { slope: 0, intercept: 0 };
 
-  const xMin = Math.min(...data.map((d) => d.x));
-  const xMax = Math.max(...data.map((d) => d.x));
+  const xValues = data.map((d) => d.x);
+  const xMin = Math.min(...xValues);
+  const xMax = Math.max(...xValues);
 
-  const regressionLine = showRegression
+  const regressionLine = showRegression && data.length > 1
     ? [
         { x: xMin, y: slope * xMin + intercept },
         { x: xMax, y: slope * xMax + intercept },
@@ -57,25 +69,47 @@ export function Scatter({ data, xLabel = 'X Axis', yLabel = 'Y Axis', showRegres
         />
         <ZAxis type="number" dataKey="size" range={[50, 500]} />
         <Tooltip
-          cursor={{ strokeDasharray: '3 3' }}
+          cursor={{ strokeDasharray: '3 3', stroke: '#3b82f6', strokeWidth: 2 }}
           formatter={(value: any, name: string) => {
             if (name === 'x') return [formatCurrency(value, 0), xLabel];
             if (name === 'y') return [formatPercent(value, 2), yLabel];
             return [value, name];
           }}
           contentStyle={{
-            backgroundColor: 'hsl(var(--popover))',
-            border: '1px solid hsl(var(--border))',
+            backgroundColor: '#1e293b',
+            border: '2px solid #3b82f6',
             borderRadius: '0.5rem',
+            padding: '12px',
+            fontSize: '14px',
+            fontWeight: '600',
+            color: '#ffffff',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+          }}
+          labelStyle={{
+            color: '#ffffff',
+            fontSize: '14px',
+            fontWeight: '700',
+          }}
+          itemStyle={{
+            color: '#ffffff',
+            fontSize: '13px',
           }}
         />
         <RechartsScatter data={data} fill="#3b82f6">
           {data.map((entry, index) => (
-            <circle key={`dot-${index}`} r={6} fill={entry.color} />
+            <circle
+              key={`dot-${index}`}
+              r={8}
+              fill={entry.color}
+              stroke="#ffffff"
+              strokeWidth={2}
+              className="transition-all hover:r-10 cursor-pointer"
+              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }}
+            />
           ))}
         </RechartsScatter>
         {showRegression && regressionLine.length > 0 && (
-          <RechartsScatter data={regressionLine} line={{ stroke: '#ef4444', strokeWidth: 2 }} shape={<></>} />
+          <RechartsScatter data={regressionLine} line={{ stroke: '#ef4444', strokeWidth: 3, strokeDasharray: '5 5' }} shape={<></>} />
         )}
         <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
         <ReferenceLine x={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
