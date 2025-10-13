@@ -1,182 +1,168 @@
-/**
- * Mock data generator for RiskPulse
- * Generates realistic OHLCV, VaR, positions, and alerts
- */
-
+import type { ExposureData, SymbolPosition, TimeSeriesPoint, Region } from '@/types';
 import {
-  SYMBOLS,
+  REGIONS,
+  ASSET_CLASSES,
+  COUNTRIES_BY_REGION,
+  OFFICES,
   DESKS,
-  ALERT_TEMPLATES,
-  type PricePoint,
-  type Position,
-  type Alert,
-  type VaRPoint,
+  INDUSTRIES,
+  SECTORS,
+  SYMBOLS,
+  getRandomElement,
 } from './seeds';
-import { generateBrownianPrice, ewmaVolatility, calculateReturns, calculateVaR } from './transforms';
+import { generateBrownianPrice } from './transforms';
 
-// Market session: 9:30 AM - 4:00 PM ET (in milliseconds)
-const MARKET_OPEN_HOUR = 9;
-const MARKET_OPEN_MINUTE = 30;
-const MARKET_CLOSE_HOUR = 16;
+class MockDataGenerator {
+  private exposureData: Map<string, ExposureData> = new Map();
+  private symbolPositions: Map<string, SymbolPosition> = new Map();
+  private priceHistory: Map<string, number[]> = new Map();
+  private updateInterval: ReturnType<typeof setInterval> | null = null;
+  private listeners: Set<() => void> = new Set();
 
-/**
- * Generate intraday timestamps (every 5 minutes)
- */
-export function generateIntradayTimestamps(date: Date = new Date()): number[] {
-  const timestamps: number[] = [];
-  const start = new Date(date);
-  start.setHours(MARKET_OPEN_HOUR, MARKET_OPEN_MINUTE, 0, 0);
-
-  const end = new Date(date);
-  end.setHours(MARKET_CLOSE_HOUR, 0, 0, 0);
-
-  let current = start.getTime();
-  while (current <= end.getTime()) {
-    timestamps.push(current);
-    current += 5 * 60 * 1000; // 5 minutes
+  constructor() {
+    this.initializeData();
   }
 
-  return timestamps;
-}
+  private initializeData() {
+    let id = 0;
 
-/**
- * Generate realistic OHLCV data
- */
-export function generateOHLCVData(
-  symbol: string,
-  timestamps: number[],
-  basePrice: number = 100
-): PricePoint[] {
-  const data: PricePoint[] = [];
-  let lastClose = basePrice;
+    REGIONS.filter((r) => r !== 'Global').forEach((region) => {
+      const regionCountries = COUNTRIES_BY_REGION[region as Exclude<Region, 'Global'>];
 
-  for (const ts of timestamps) {
-    const open = lastClose;
-    const vol = 0.015 + Math.random() * 0.01; // 1.5-2.5% volatility
+      regionCountries.forEach((country) => {
+        ASSET_CLASSES.forEach((assetClass) => {
+          const numEntries = Math.floor(Math.random() * 3) + 2;
 
-    // Generate OHLC with brownian motion
-    const c1 = generateBrownianPrice(open, 1 / 78, 0, vol);
-    const c2 = generateBrownianPrice(c1, 1 / 78, 0, vol);
-    const c3 = generateBrownianPrice(c2, 1 / 78, 0, vol);
-    const close = generateBrownianPrice(c3, 1 / 78, 0, vol);
+          for (let i = 0; i < numEntries; i++) {
+            const exposure = 10000000 + Math.random() * 90000000;
+            const exposureLimit = exposure * (1.1 + Math.random() * 0.5);
+            const exposureRelToLimit = exposure / exposureLimit;
 
-    const prices = [open, c1, c2, c3, close];
-    const high = Math.max(...prices);
-    const low = Math.min(...prices);
+            const entry: ExposureData = {
+              id: `exp-${id++}`,
+              name: `${country}-${assetClass}-${i}`,
+              timestamp: Date.now(),
+              region,
+              country,
+              desk: getRandomElement(DESKS),
+              office: getRandomElement(OFFICES),
+              assetClass,
+              exposure,
+              exposureLimit,
+              exposureRelToLimit,
+              exposureDiff: (Math.random() - 0.5) * 10000000,
+              var1day: exposure * (0.01 + Math.random() * 0.02),
+              var1dayLimit: exposure * 0.03,
+              var10day: exposure * (0.03 + Math.random() * 0.05),
+              var10dayLimit: exposure * 0.08,
+              var10dayRelToLimit: 0,
+              dailyPnl: (Math.random() - 0.5) * exposure * 0.02,
+            };
 
-    data.push({
-      timestamp: ts,
-      open,
-      high,
-      low,
-      close,
-      volume: Math.floor(1000000 + Math.random() * 5000000),
+            entry.var10dayRelToLimit = entry.var10day / entry.var10dayLimit;
+            this.exposureData.set(entry.id, entry);
+          }
+        });
+      });
     });
 
-    lastClose = close;
-  }
+    SYMBOLS.forEach((symbol, idx) => {
+      const industry = getRandomElement(INDUSTRIES);
+      const sector = getRandomElement(SECTORS);
+      const quantity = 1000 + Math.random() * 9000;
+      const price = 50 + Math.random() * 200;
 
-  return data;
-}
+      const position: SymbolPosition = {
+        id: `pos-${idx}`,
+        name: symbol,
+        timestamp: Date.now(),
+        symbol,
+        industry,
+        sector,
+        desk: getRandomElement(DESKS),
+        quantity,
+        price,
+        priceChangePercent: (Math.random() - 0.5) * 10,
+        marketValue: quantity * price,
+        highLowSpread: Math.random() * 0.05,
+        sentiment: (Math.random() - 0.5) * 2,
+        lastTradeSize: Math.floor(Math.random() * 1000),
+      };
 
-/**
- * Generate VaR timeline with limit bands and breaches
- */
-export function generateVaRData(
-  timestamps: number[],
-  baseVaR: number = 50000,
-  limit: number = 75000
-): VaRPoint[] {
-  const data: VaRPoint[] = [];
-  let lastVaR = baseVaR;
-
-  for (let i = 0; i < timestamps.length; i++) {
-    // VaR drifts with occasional spikes
-    const drift = (Math.random() - 0.5) * 0.05;
-    const spike = Math.random() < 0.05 ? 1.3 : 1; // 5% chance of spike
-    lastVaR = Math.max(10000, lastVaR * (1 + drift) * spike);
-
-    const upperBand = limit * 1.1;
-    const lowerBand = limit * 0.9;
-    const breach = lastVaR > limit;
-
-    data.push({
-      timestamp: timestamps[i],
-      var: lastVaR,
-      limit,
-      upperBand,
-      lowerBand,
-      breach,
+      this.symbolPositions.set(symbol, position);
+      this.priceHistory.set(symbol, [price]);
     });
   }
 
-  return data;
-}
-
-/**
- * Generate random positions
- */
-export function generatePositions(): Position[] {
-  return SYMBOLS.slice(0, 12).map((s) => {
-    const side = Math.random() > 0.5 ? 'LONG' : 'SHORT';
-    const qty = Math.floor(100 + Math.random() * 900);
-    const avgPrice = 50 + Math.random() * 150;
-    const currentPrice = avgPrice * (1 + (Math.random() - 0.5) * 0.1);
-    const pnl = side === 'LONG' ? (currentPrice - avgPrice) * qty : (avgPrice - currentPrice) * qty;
-    const exposure = currentPrice * qty;
-
-    let riskClass: 'Low' | 'Medium' | 'High' = 'Low';
-    if (s.assetClass === 'Futures' || s.assetClass === 'FX') riskClass = 'High';
-    else if (Math.abs(pnl / exposure) > 0.05) riskClass = 'Medium';
-
-    return {
-      symbol: s.symbol,
-      side,
-      quantity: qty,
-      avgPrice,
-      currentPrice,
-      pnl,
-      exposure,
-      riskClass,
-      desk: DESKS[Math.floor(Math.random() * DESKS.length)],
-    };
-  });
-}
-
-/**
- * Generate alert feed
- */
-export function generateAlerts(count: number = 20): Alert[] {
-  const alerts: Alert[] = [];
-  const now = Date.now();
-
-  for (let i = 0; i < count; i++) {
-    const template = ALERT_TEMPLATES[Math.floor(Math.random() * ALERT_TEMPLATES.length)];
-    const symbol = Math.random() > 0.5 ? SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)].symbol : undefined;
-    const desk = Math.random() > 0.6 ? DESKS[Math.floor(Math.random() * DESKS.length)] : undefined;
-
-    alerts.push({
-      id: `alert-${i}-${now}`,
-      timestamp: now - i * 60000 * 5, // staggered by 5 minutes
-      severity: template.severity as 'INFO' | 'WARN' | 'CRITICAL',
-      message: template.message.replace('{symbol}', symbol || 'N/A'),
-      symbol,
-      desk,
-    });
+  public startLiveUpdates(enabled: boolean) {
+    if (enabled && !this.updateInterval) {
+      this.updateInterval = setInterval(() => {
+        this.tick();
+      }, 600 + Math.random() * 200);
+    } else if (!enabled && this.updateInterval) {
+      clearInterval(this.updateInterval);
+      this.updateInterval = null;
+    }
   }
 
-  return alerts.sort((a, b) => b.timestamp - a.timestamp);
+  private tick() {
+    this.exposureData.forEach((entry) => {
+      const prevExposure = entry.exposure;
+      const change = (Math.random() - 0.5) * entry.exposure * 0.001;
+      entry.exposure = Math.max(0, entry.exposure + change);
+      entry.exposureRelToLimit = entry.exposure / entry.exposureLimit;
+      entry.exposureDiff = entry.exposure - prevExposure;
+      entry.var1day = entry.exposure * (0.01 + Math.random() * 0.02);
+      entry.var10day = entry.exposure * (0.03 + Math.random() * 0.05);
+      entry.var10dayRelToLimit = entry.var10day / entry.var10dayLimit;
+      entry.dailyPnl = (Math.random() - 0.5) * entry.exposure * 0.02;
+      entry.timestamp = Date.now();
+    });
+
+    this.symbolPositions.forEach((position) => {
+      const lastPrice = position.price;
+      const newPrice = generateBrownianPrice(lastPrice, 1 / 252, 0, 0.02);
+      position.price = newPrice;
+      position.priceChangePercent = ((newPrice - lastPrice) / lastPrice) * 100;
+      position.marketValue = position.quantity * newPrice;
+      position.highLowSpread = Math.random() * 0.05;
+      position.sentiment = Math.max(-1, Math.min(1, position.sentiment + (Math.random() - 0.5) * 0.1));
+      position.timestamp = Date.now();
+
+      const history = this.priceHistory.get(position.symbol) || [];
+      history.push(newPrice);
+      if (history.length > 100) history.shift();
+      this.priceHistory.set(position.symbol, history);
+    });
+
+    this.notifyListeners();
+  }
+
+  public subscribe(callback: () => void) {
+    this.listeners.add(callback);
+    return () => this.listeners.delete(callback);
+  }
+
+  private notifyListeners() {
+    this.listeners.forEach((cb) => cb());
+  }
+
+  public getExposureData(): ExposureData[] {
+    return Array.from(this.exposureData.values());
+  }
+
+  public getSymbolPositions(): SymbolPosition[] {
+    return Array.from(this.symbolPositions.values());
+  }
+
+  public getPriceHistory(symbol: string, length: number = 50): TimeSeriesPoint[] {
+    const history = this.priceHistory.get(symbol) || [];
+    const now = Date.now();
+    return history.slice(-length).map((value, idx) => ({
+      timestamp: now - (history.length - 1 - idx) * 60000,
+      value,
+    }));
+  }
 }
 
-/**
- * Generate exposure by asset class (for heatmap/treemap)
- */
-export function generateExposureByAsset(): { name: string; value: number; fill: string }[] {
-  return [
-    { name: 'Equities', value: 1500000 + Math.random() * 500000, fill: '#3b82f6' },
-    { name: 'Futures', value: 800000 + Math.random() * 300000, fill: '#8b5cf6' },
-    { name: 'FX', value: 600000 + Math.random() * 200000, fill: '#14b8a6' },
-    { name: 'Rates', value: 400000 + Math.random() * 150000, fill: '#f59e0b' },
-    { name: 'Credit', value: 300000 + Math.random() * 100000, fill: '#ef4444' },
-  ];
-}
+export const mockDataGenerator = new MockDataGenerator();

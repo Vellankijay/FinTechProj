@@ -1,9 +1,11 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
+import Navbar from '@/components/layout/Navbar';
+import Footer from '@/components/layout/Footer';
 import Home from '@/routes/Home';
-import Dashboard from '@/routes/Dashboard';
+import Summary from '@/routes/Summary';
+import Visual from '@/routes/Visual';
+import DeskPositions from '@/routes/DeskPositions';
 import Settings from '@/routes/Settings';
 
 export default function App() {
@@ -14,7 +16,9 @@ export default function App() {
         <main className="flex-1">
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/summary" element={<Summary />} />
+            <Route path="/visual" element={<Visual />} />
+            <Route path="/desk-positions" element={<DeskPositions />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>

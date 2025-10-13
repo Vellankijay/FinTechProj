@@ -54,13 +54,13 @@ export default function Home() {
             </p>
             <div className="flex items-center justify-center gap-4 pt-4">
               <Button asChild size="lg" className="group">
-                <Link to="/dashboard">
+                <Link to="/summary">
                   Open Dashboard
                   <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </Link>
               </Button>
               <Button asChild variant="outline" size="lg">
-                <Link to="/settings">Configure Limits</Link>
+                <Link to="/settings">Configure Settings</Link>
               </Button>
             </div>
           </motion.div>
@@ -132,7 +132,7 @@ export default function Home() {
             </p>
             <div className="flex items-center justify-center gap-4 pt-4">
               <Button asChild size="lg">
-                <Link to="/dashboard">Try Dashboard</Link>
+                <Link to="/summary">Try Dashboard</Link>
               </Button>
               <Button asChild variant="outline" size="lg">
                 <Link to="/settings">View Settings</Link>
