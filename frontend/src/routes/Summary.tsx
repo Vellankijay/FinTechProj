@@ -12,9 +12,10 @@ import type { DrilldownLevel } from '@/types';
 
 export default function Summary() {
   const [drilldownLevel, setDrilldownLevel] = useState<DrilldownLevel>('global');
-  const { data: summaryData, isLoading: summaryLoading } = useExposureSummary(drilldownLevel);
-  const { data: varData, isLoading: varLoading } = useVaRDistributions();
-  const { data: heatmapData, isLoading: heatmapLoading } = useHeatmapData();
+  // Summary page uses snapshot mode - data only updates when page is refreshed
+  const { data: summaryData, isLoading: summaryLoading } = useExposureSummary(drilldownLevel, false);
+  const { data: varData, isLoading: varLoading } = useVaRDistributions(false);
+  const { data: heatmapData, isLoading: heatmapLoading } = useHeatmapData(false);
 
   return (
     <div className="container mx-auto p-6 space-y-6">

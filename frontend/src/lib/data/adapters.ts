@@ -44,19 +44,55 @@ export function useExposureSummary(drilldownLevel: 'global' | 'region' | 'countr
       const totalLimit = data.reduce((sum, d) => sum + d.exposureLimit, 0);
       const avgRelToLimit = totalExposure / totalLimit;
 
-      const byRegion = data.reduce((acc, d) => {
-        const key = d.region;
-        if (!acc[key]) acc[key] = { exposure: 0, count: 0 };
-        acc[key].exposure += d.exposure;
-        acc[key].count++;
-        return acc;
-      }, {} as Record<string, { exposure: number; count: number }>);
+      // Determine grouping key based on drilldown level
+      let donutData: Array<{ name: string; value: number; percentage: number }>;
 
-      const donutData = Object.entries(byRegion).map(([name, { exposure }]) => ({
-        name,
-        value: exposure,
-        percentage: (exposure / totalExposure) * 100,
-      }));
+      if (drilldownLevel === 'global') {
+        // Global: Show by region
+        const byRegion = data.reduce((acc, d) => {
+          const key = d.region;
+          if (!acc[key]) acc[key] = { exposure: 0, count: 0 };
+          acc[key].exposure += d.exposure;
+          acc[key].count++;
+          return acc;
+        }, {} as Record<string, { exposure: number; count: number }>);
+
+        donutData = Object.entries(byRegion).map(([name, { exposure }]) => ({
+          name,
+          value: exposure,
+          percentage: (exposure / totalExposure) * 100,
+        }));
+      } else if (drilldownLevel === 'region') {
+        // Region: Show by asset class
+        const byAssetClass = data.reduce((acc, d) => {
+          const key = d.assetClass;
+          if (!acc[key]) acc[key] = { exposure: 0, count: 0 };
+          acc[key].exposure += d.exposure;
+          acc[key].count++;
+          return acc;
+        }, {} as Record<string, { exposure: number; count: number }>);
+
+        donutData = Object.entries(byAssetClass).map(([name, { exposure }]) => ({
+          name,
+          value: exposure,
+          percentage: (exposure / totalExposure) * 100,
+        }));
+      } else {
+        // drilldownLevel === 'country' - Show by country
+        const byCountry = data.reduce((acc, d) => {
+          const key = d.country || 'Unknown';
+          if (!acc[key]) acc[key] = { exposure: 0, count: 0 };
+          acc[key].exposure += d.exposure;
+          acc[key].count++;
+          return acc;
+        }, {} as Record<string, { exposure: number; count: number }>);
+
+        donutData = Object.entries(byCountry).map(([name, { exposure }]) => ({
+          name,
+          value: exposure,
+          percentage: (exposure / totalExposure) * 100,
+        }));
+      }
 
       return {
         totalExposure,

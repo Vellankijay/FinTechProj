@@ -11,48 +11,69 @@ function CustomContent(props: any) {
   const { x, y, width, height, name, value, color } = props;
 
   // Guard against missing or invalid data
-  if (width < 30 || height < 30 || !name || value === undefined || value === null) return null;
+  if (width < 25 || height < 25 || !name || value === undefined || value === null) return null;
 
+  // Calculate responsive font sizes - name larger, value smaller
+  const nameFontSize = Math.max(11, Math.min(18, width / 5));
+  const valueFontSize = Math.max(8, Math.min(11, width / 10));
+
+  // Smart text truncation
+  const maxChars = Math.floor(width / (nameFontSize * 0.55));
   const displayName = name && typeof name === 'string'
-    ? (name.length > 12 ? name.substring(0, 12) + '...' : name)
+    ? (name.length > maxChars ? name.substring(0, Math.max(3, maxChars - 2)) + '...' : name)
     : '';
+
+  // Show text if there's reasonable space
+  const showText = width > 45 && height > 30;
+  const showValue = width > 65 && height > 45;
 
   return (
     <g>
+      {/* Simple solid rectangle with clean borders */}
       <rect
         x={x}
         y={y}
         width={width}
         height={height}
-        style={{
-          fill: color || '#3b82f6',
-          stroke: '#ffffff',
-          strokeWidth: 3,
-          opacity: 0.95,
-        }}
-        className="transition-all hover:opacity-100 hover:brightness-110 cursor-pointer"
+        fill={color || '#3b82f6'}
+        stroke="#000000"
+        strokeWidth={1}
+        opacity={0.9}
+        className="transition-all hover:opacity-100 cursor-pointer"
       />
-      {width > 60 && height > 40 && displayName && (
+
+      {showText && displayName && (
         <>
+          {/* Country/Name - Prominent and forward */}
           <text
             x={x + width / 2}
-            y={y + height / 2 - 10}
+            y={y + height / 2 - (showValue ? 6 : 0)}
             textAnchor="middle"
-            fill="#fff"
-            fontSize={Math.min(14, width / 8)}
-            fontWeight="600"
+            dominantBaseline="middle"
+            fill="#ffffff"
+            fontSize={nameFontSize}
+            fontWeight="800"
+            fontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
           >
             {displayName}
           </text>
-          <text
-            x={x + width / 2}
-            y={y + height / 2 + 10}
-            textAnchor="middle"
-            fill="#fff"
-            fontSize={Math.min(12, width / 10)}
-          >
-            {formatCurrency(value, 0)}
-          </text>
+
+          {/* Value - Subtle and in background */}
+          {showValue && (
+            <text
+              x={x + width / 2}
+              y={y + height / 2 + nameFontSize - 2}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="#ffffff"
+              fontSize={valueFontSize}
+              fontWeight="400"
+              fontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+              opacity={0.7}
+            >
+              {formatCurrency(value, 0)}
+            </text>
+          )}
         </>
       )}
     </g>
@@ -72,7 +93,7 @@ export function Treemap({ data, dataKey = 'value' }: TreemapProps) {
         <Tooltip
           formatter={(value: number) => formatCurrency(value, 0)}
           contentStyle={{
-            backgroundColor: '#1e293b',
+            backgroundColor: '#000000',
             border: '2px solid #3b82f6',
             borderRadius: '0.5rem',
             padding: '12px',
@@ -85,6 +106,10 @@ export function Treemap({ data, dataKey = 'value' }: TreemapProps) {
             color: '#ffffff',
             fontSize: '14px',
             fontWeight: '700',
+          }}
+          itemStyle={{
+            color: '#ffffff',
+            fontSize: '13px',
           }}
         />
       </RechartsTreemap>

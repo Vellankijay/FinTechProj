@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { KpiStrip } from '@/components/data-display/KpiStrip';
 import { Treemap } from '@/components/charts/Treemap';
@@ -9,14 +9,30 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useQuery } from '@tanstack/react-query';
 import { mockDataGenerator } from '@/lib/mock/generator';
+import { useSettingsStore } from '@/store/useSettingsStore';
 import type { KpiMetric, TreemapNode } from '@/types';
 import { INDUSTRY_COLORS } from '@/types';
 
 export default function DeskPositions() {
   const [selectedSymbol, setSelectedSymbol] = useState('AAPL');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const mockLiveEnabled = useSettingsStore((state) => state.mockLiveEnabled);
+
+  // Subscribe to live updates for continuous data refreshing
+  useEffect(() => {
+    if (mockLiveEnabled) {
+      mockDataGenerator.startLiveUpdates(true);
+      const unsubscribe = mockDataGenerator.subscribe(() => {
+        setRefreshKey((k) => k + 1);
+      });
+      return () => {
+        unsubscribe();
+      };
+    }
+  }, [mockLiveEnabled]);
 
   const { data: positionsData, isLoading: positionsLoading } = useQuery({
-    queryKey: ['desk-positions-data'],
+    queryKey: ['desk-positions-data', refreshKey],
     queryFn: async () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
       const positions = mockDataGenerator.getSymbolPositions();
@@ -106,16 +122,16 @@ export default function DeskPositions() {
 
       return { kpis, positionMapData, sentimentScatter, spreadScatter, rawPositions: positions };
     },
-    staleTime: Infinity, // Data never becomes stale
+    staleTime: mockLiveEnabled ? 0 : 30000, // Live mode: always fresh, otherwise cache for 30s
   });
 
   const { data: historyData, isLoading: historyLoading } = useQuery({
-    queryKey: ['symbol-history', selectedSymbol],
+    queryKey: ['symbol-history', selectedSymbol, refreshKey],
     queryFn: async () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
       return mockDataGenerator.getPriceHistory(selectedSymbol, 50);
     },
-    staleTime: Infinity,
+    staleTime: mockLiveEnabled ? 0 : 30000, // Live mode: always fresh, otherwise cache for 30s
     enabled: !!selectedSymbol,
   });
 

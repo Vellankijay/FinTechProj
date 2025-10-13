@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Treemap } from '@/components/charts/Treemap';
 import { Scatter } from '@/components/charts/Scatter';
@@ -5,11 +6,28 @@ import { RegionTable } from '@/components/data-display/RegionTable';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { mockDataGenerator } from '@/lib/mock/generator';
+import { useSettingsStore } from '@/store/useSettingsStore';
 import type { TreemapNode, ScatterPoint, RegionTableRow } from '@/types';
 
 export default function Visual() {
+  const [refreshKey, setRefreshKey] = useState(0);
+  const mockLiveEnabled = useSettingsStore((state) => state.mockLiveEnabled);
+
+  // Subscribe to live updates for continuous data refreshing
+  useEffect(() => {
+    if (mockLiveEnabled) {
+      mockDataGenerator.startLiveUpdates(true);
+      const unsubscribe = mockDataGenerator.subscribe(() => {
+        setRefreshKey((k) => k + 1);
+      });
+      return () => {
+        unsubscribe();
+      };
+    }
+  }, [mockLiveEnabled]);
+
   const { data, isLoading } = useQuery({
-    queryKey: ['visual-page-data'],
+    queryKey: ['visual-page-data', refreshKey],
     queryFn: async () => {
       await new Promise((resolve) => setTimeout(resolve, 150));
       const rawData = mockDataGenerator.getExposureData();
@@ -133,7 +151,7 @@ export default function Visual() {
 
       return { treemapData, scatterData, tableData: rows, rawData };
     },
-    staleTime: Infinity, // Data never becomes stale
+    staleTime: mockLiveEnabled ? 0 : 30000, // Live mode: always fresh, otherwise cache for 30s
   });
 
   return (

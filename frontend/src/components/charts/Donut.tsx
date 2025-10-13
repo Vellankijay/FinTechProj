@@ -68,7 +68,7 @@ export function Donut({ data, centerLabel, centerValue }: DonutProps) {
         </PieChart>
       </ResponsiveContainer>
       {centerLabel && centerValue && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ marginBottom: '36px' }}>
           <div className="text-center">
             <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{centerLabel}</div>
             <div className="text-3xl font-bold text-foreground mt-1">{centerValue}</div>
