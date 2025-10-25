@@ -8,8 +8,8 @@ export default function Navbar() {
   const links = [
     { path: '/', label: 'Home' },
     { path: '/summary', label: 'Summary' },
-    { path: '/visual', label: 'Visual' },
-    { path: '/desk-positions', label: 'Desk Positions' },
+    { path: '/tech', label: 'Tech' },
+    { path: '/healthtech', label: 'Healthtech' },
     { path: '/settings', label: 'Settings' },
   ];
 

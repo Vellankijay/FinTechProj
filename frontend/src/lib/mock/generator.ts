@@ -5,10 +5,10 @@ import {
   COUNTRIES_BY_REGION,
   OFFICES,
   DESKS,
-  INDUSTRIES,
   SECTORS,
   SYMBOLS,
   getRandomElement,
+  getIndustryForSymbol,
 } from './seeds';
 import { generateBrownianPrice } from './transforms';
 
@@ -67,7 +67,7 @@ class MockDataGenerator {
     });
 
     SYMBOLS.forEach((symbol, idx) => {
-      const industry = getRandomElement(INDUSTRIES);
+      const industry = getIndustryForSymbol(symbol);
       const sector = getRandomElement(SECTORS);
       const quantity = 1000 + Math.random() * 9000;
       const price = 50 + Math.random() * 200;
@@ -110,22 +110,22 @@ class MockDataGenerator {
       const prevExposure = entry.exposure;
       const change = (Math.random() - 0.5) * entry.exposure * 0.001;
       entry.exposure = Math.max(0, entry.exposure + change);
-      entry.exposureRelToLimit = entry.exposure / entry.exposureLimit;
+      entry.exposureRelToLimit = entry.exposureLimit > 0 ? entry.exposure / entry.exposureLimit : 0;
       entry.exposureDiff = entry.exposure - prevExposure;
       entry.var1day = entry.exposure * (0.01 + Math.random() * 0.02);
       entry.var10day = entry.exposure * (0.03 + Math.random() * 0.05);
-      entry.var10dayRelToLimit = entry.var10day / entry.var10dayLimit;
+      entry.var10dayRelToLimit = entry.var10dayLimit > 0 ? entry.var10day / entry.var10dayLimit : 0;
       entry.dailyPnl = (Math.random() - 0.5) * entry.exposure * 0.02;
       entry.timestamp = Date.now();
     });
 
     this.symbolPositions.forEach((position) => {
       const lastPrice = position.price;
-      const newPrice = generateBrownianPrice(lastPrice, 1 / 252, 0, 0.02);
+      const newPrice = Math.max(1, generateBrownianPrice(lastPrice, 1 / 252, 0, 0.02));
       position.price = newPrice;
-      position.priceChangePercent = ((newPrice - lastPrice) / lastPrice) * 100;
+      position.priceChangePercent = lastPrice > 0 ? ((newPrice - lastPrice) / lastPrice) * 100 : 0;
       position.marketValue = position.quantity * newPrice;
-      position.highLowSpread = Math.random() * 0.05;
+      position.highLowSpread = Math.max(0, Math.min(0.2, Math.random() * 0.05));
       position.sentiment = Math.max(-1, Math.min(1, position.sentiment + (Math.random() - 0.5) * 0.1));
       position.timestamp = Date.now();
 

@@ -4,8 +4,8 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import Home from '@/routes/Home';
 import Summary from '@/routes/Summary';
-import Visual from '@/routes/Visual';
-import DeskPositions from '@/routes/DeskPositions';
+import Tech from '@/routes/Tech';
+import Healthtech from '@/routes/Healthtech';
 import Settings from '@/routes/Settings';
 
 export default function App() {
@@ -17,8 +17,8 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/summary" element={<Summary />} />
-            <Route path="/visual" element={<Visual />} />
-            <Route path="/desk-positions" element={<DeskPositions />} />
+            <Route path="/tech" element={<Tech />} />
+            <Route path="/healthtech" element={<Healthtech />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>

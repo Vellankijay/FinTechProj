@@ -37,7 +37,6 @@ export function useExposureSummary(drilldownLevel: 'global' | 'region' | 'countr
   return useQuery({
     queryKey: ['exposure-summary', drilldownLevel, enableLiveUpdates ? refreshKey : 'snapshot'],
     queryFn: async () => {
-      await new Promise((resolve) => setTimeout(resolve, 100));
       const data = mockDataGenerator.getExposureData();
 
       const totalExposure = data.reduce((sum, d) => sum + d.exposure, 0);

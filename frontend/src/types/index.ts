@@ -2,7 +2,7 @@
 
 export type Region = 'Global' | 'Australasia' | 'Europe' | 'Far East' | 'Middle East' | 'North America';
 
-export type AssetClass = 'Commodities' | 'Equity' | 'Fixed Income' | 'FX' | 'Mutual Funds';
+export type AssetClass = 'Public Equity' | 'Private Equity' | 'Venture Capital' | 'Debt Financing' | 'IPO Pipeline';
 
 export type DrilldownLevel = 'global' | 'region' | 'country';
 
@@ -159,14 +159,14 @@ export const SENTIMENT_COLOR_SCALE = {
 
 // Industry colors for Position Map
 export const INDUSTRY_COLORS: Record<string, string> = {
-  Technology: '#3b82f6',
-  Healthcare: '#22c55e',
-  Financials: '#eab308',
-  Energy: '#f97316',
-  'Consumer Discretionary': '#a855f7',
-  Industrials: '#64748b',
-  Materials: '#06b6d4',
-  Utilities: '#84cc16',
-  'Real Estate': '#ec4899',
-  'Consumer Staples': '#14b8a6',
+  'Software & Cloud': '#3b82f6',        // blue
+  'Hardware & Devices': '#06b6d4',      // cyan
+  'AI & Data Science': '#8b5cf6',       // violet
+  'Cybersecurity': '#ef4444',           // red
+  'Medical Technology': '#22c55e',      // green
+  'Biotechnology': '#84cc16',           // lime
+  'Digital Health': '#14b8a6',          // teal
+  'Healthcare IT': '#10b981',           // emerald
+  'Pharma Tech': '#6366f1',             // indigo
+  'Telemedicine': '#ec4899',            // pink
 };
