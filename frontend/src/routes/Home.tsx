@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, TrendingUp, Shield, Zap, BarChart3, Activity, CheckCircle, Play } from 'lucide-react';
+import { ArrowRight, TrendingUp, Shield, Zap, BarChart3, Activity, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState, useEffect } from 'react';
 
@@ -151,12 +151,6 @@ export default function Home() {
                     <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </Link>
                 </Button>
-                <Button asChild variant="outline" size="lg" className="group backdrop-blur-sm">
-                  <Link to="/settings">
-                    <Play className="mr-2 h-4 w-4" />
-                    Watch Demo
-                  </Link>
-                </Button>
               </motion.div>
 
               {/* Trust Indicators */}
@@ -288,13 +282,24 @@ export default function Home() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.6, delay: i * 0.1 }}
-                className="glass-panel rounded-2xl p-6 space-y-4"
+                whileHover={{
+                  y: -8,
+                  transition: { duration: 0.3, ease: "easeOut" }
+                }}
+                className="glass-panel rounded-2xl p-6 space-y-4 relative overflow-hidden group cursor-pointer"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10">
-                  <feature.icon className="h-6 w-6 text-accent" />
+                {/* Blue glow effect on hover */}
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 h-32 w-32 rounded-full bg-blue-500/40 blur-2xl" />
                 </div>
-                <h3 className="text-xl font-semibold">{feature.title}</h3>
-                <p className="text-sm text-muted-foreground">{feature.description}</p>
+
+                <div className="relative z-10">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10 group-hover:bg-accent/20 transition-colors duration-300">
+                    <feature.icon className="h-6 w-6 text-accent" />
+                  </div>
+                  <h3 className="text-xl font-semibold">{feature.title}</h3>
+                  <p className="text-sm text-muted-foreground">{feature.description}</p>
+                </div>
               </motion.div>
             ))}
           </div>
