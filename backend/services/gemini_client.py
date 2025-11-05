@@ -13,6 +13,7 @@ def _get_gemini_model():
     """Initialize Gemini model with API key."""
     api_key = vault("GEMINI_API_KEY", required=True)
     genai.configure(api_key=api_key)
+    # Using gemini-2.0-flash-exp (experimental but works with your API key)
     return genai.GenerativeModel('gemini-2.0-flash-exp')
 
 
