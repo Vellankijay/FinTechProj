@@ -19,6 +19,8 @@ def get_runbook(scenario: str) -> Dict[str, any]:
         "var breach": _var_breach_runbook(),
         "concentration risk": _concentration_risk_runbook(),
         "market dislocation": _market_dislocation_runbook(),
+        "data latency": _data_latency_runbook(),
+        "data latency alert": _data_latency_runbook(),
     }
 
     scenario_lower = scenario.lower().strip()
@@ -46,6 +48,7 @@ def list_runbooks() -> List[str]:
         "var breach",
         "concentration risk",
         "market dislocation",
+        "data latency",
     ]
 
 
@@ -154,4 +157,41 @@ def _market_dislocation_runbook() -> Dict[str, any]:
         "escalation": ["CEO", "CRO", "CFO", "Crisis Management Team"],
         "tools": ["Market volatility dashboard", "Liquidity stress tests", "Margin calculator"],
         "sla": "Crisis team activation within 30 minutes if criteria met",
+    }
+
+
+def _data_latency_runbook() -> Dict[str, any]:
+    """Runbook for data latency alert investigation."""
+    return {
+        "scenario": "data latency",
+        "title": "Data Latency Alert Investigation",
+        "severity": "HIGH",
+        "description": (
+            "Market data feed or internal data pipeline experiencing delays that could "
+            "impact trading decisions, risk calculations, or compliance reporting."
+        ),
+        "steps": [
+            "1. CHECK INGESTION PIPELINE: Verify data ingestion pipeline timestamps (Kafka/Kinesis topics, message queues)",
+            "2. VERIFY HEARTBEAT: Check latest feed heartbeat in monitoring dashboard - confirm last successful update time",
+            "3. COMPARE LAG: Compare upstream vs. downstream lag to identify bottleneck location (source, network, processing, or storage)",
+            "4. ASSESS IMPACT: Determine which systems/strategies are affected - risk calculations, trading algos, compliance reports",
+            "5. RESTART IF NEEDED: If lag exceeds 60 seconds, initiate data source restart or resync procedure",
+            "6. FALLBACK DATA: Switch to backup data feed or alternative source if primary feed remains degraded >5 minutes",
+            "7. HALT DEPENDENT TRADING: Suspend automated trading strategies that depend on affected data feed",
+            "8. NOTIFY OPS: Alert operations channel with affected systems, estimated resolution time, and workaround status",
+            "9. DOCUMENT: Log incident details, root cause, resolution steps, and data gaps for audit trail",
+        ],
+        "escalation": ["Data Operations Team", "Platform Engineering", "Risk Manager (if risk calculations affected)"],
+        "tools": [
+            "Data pipeline monitoring dashboard",
+            "Feed heartbeat monitor",
+            "Kafka/Kinesis lag metrics",
+            "Network latency analyzer"
+        ],
+        "sla": "Initial triage within 2 minutes, resolution or fallback within 10 minutes",
+        "thresholds": {
+            "warning": "Lag > 15 seconds",
+            "critical": "Lag > 60 seconds or data gap > 5 minutes",
+            "emergency": "Complete feed outage or lag > 5 minutes with no fallback"
+        }
     }

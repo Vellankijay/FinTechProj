@@ -46,12 +46,13 @@ I can help you with:
 • **VaR Analysis** - Query Value-at-Risk trends and metrics
 • **Alert Explanations** - Understand why risk breaches occurred
 • **Stress Testing** - Run portfolio stress tests
-• **Operational Playbooks** - Get step-by-step runbooks for risk events
+• **Operational Playbooks** - Get step-by-step runbooks for risk events (data latency, order-flow anomaly, VaR breach, etc.)
 • **Emergency Actions** - Halt trading (with confirmation)
 
 Try asking:
 "What's PM_BOOK1 VaR trend last 30 min?"
 "Why did we trip VAR_BREACH at 10:32?"
+"Walk me through steps to investigate a data latency alert"
 "Playbook for order-flow anomaly"`,
         timestamp: Date.now(),
       }
