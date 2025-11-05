@@ -26,8 +26,25 @@ A production-ready, frontend-only React application that provides real-time fina
 - **Price Sentiment Scatter**: Net sentiment vs. price change analysis
 - **Spreads Scatter**: High-low spread vs. sentiment correlation
 
+### 🤖 AI-Powered Risk Chat (NEW!)
+- **Gemini Integration**: AI assistant powered by Google Gemini 2.0
+- **Real-time Queries**: Ask about VaR trends, exposure, P&L metrics
+- **Alert Explanations**: Get root cause analysis for risk breaches
+- **Stress Testing**: Run portfolio stress tests with custom scenarios
+- **Operational Runbooks**: Access playbooks for common risk events
+- **Emergency Actions**: Halt trading with two-step confirmation
+- **RBAC Security**: Role-based permissions (USER/RISK/ADMIN)
+- **Full Audit Trail**: Comprehensive logging of all actions
+
+**Example Queries:**
+- "What's PM_BOOK1 VaR trend last 30 min?"
+- "Why did we trip VAR_BREACH at 10:32?"
+- "Playbook for order-flow anomaly"
+- "Run stress test on PM_BOOK1 with -10% shock"
+
 ## Tech Stack
 
+### Frontend
 - **Framework**: Vite + React 18 + TypeScript
 - **Styling**: TailwindCSS with custom design tokens
 - **UI Components**: shadcn/ui primitives
@@ -36,6 +53,13 @@ A production-ready, frontend-only React application that provides real-time fina
 - **Animations**: Framer Motion (200-300ms transitions)
 - **Icons**: lucide-react
 - **Testing**: Vitest + React Testing Library
+
+### Backend (Risk Chat Feature)
+- **Framework**: FastAPI 0.109
+- **AI**: Google Gemini 2.0 Flash
+- **Validation**: Pydantic v2
+- **Testing**: pytest
+- **Data Sources**: Alpha Vantage, Yahoo Finance, Finnhub, NYTimes API
 
 ## Design Philosophy
 
@@ -50,9 +74,26 @@ Apple-inspired aesthetic with:
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18+ and npm/pnpm/yarn
+- **Node.js 18+** and npm/pnpm/yarn
+- **Python 3.9+** (for Risk Chat feature)
+- **Gemini API Key** (optional, for Risk Chat feature)
 
-### Installation
+### Quick Start
+
+**Option 1: Run Everything Together (Recommended)**
+
+```bash
+# Install all dependencies
+npm run install:all
+
+# Run both frontend and backend
+npm run dev
+```
+
+- Frontend: http://localhost:5173
+- Backend: http://localhost:8000
+
+**Option 2: Frontend Only (No Risk Chat)**
 
 ```bash
 # Navigate to frontend directory
@@ -66,6 +107,13 @@ npm run dev
 ```
 
 The app will be available at `http://localhost:5173`
+
+### Risk Chat Feature Setup
+
+See **[START_HERE.md](./START_HERE.md)** for detailed setup instructions including:
+- Environment configuration
+- Gemini API key setup
+- Feature flag configuration
 
 ### Build for Production
 

@@ -9,6 +9,7 @@ Free-tier stock/industry risk model using:
 import requests, numpy as np, pandas as pd, yfinance as yf
 from datetime import datetime, timedelta
 import finnhub
+import time
 
 # === API KEYS ===
 ALPHA_KEY = "8I2SPDA2XM9I2XFH"

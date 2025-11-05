@@ -7,6 +7,7 @@ import Summary from '@/routes/Summary';
 import Tech from '@/routes/Tech';
 import Healthtech from '@/routes/Healthtech';
 import Settings from '@/routes/Settings';
+import RiskChat from '@/routes/RiskChat';
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="/summary" element={<Summary />} />
             <Route path="/tech" element={<Tech />} />
             <Route path="/healthtech" element={<Healthtech />} />
+            <Route path="/risk-chat" element={<RiskChat />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>

@@ -1,0 +1,31 @@
+{
+  "name": "fintech-risk-operations",
+  "version": "1.0.0",
+  "description": "FinTech Risk Analytics Dashboard with AI-powered Risk Chat",
+  "scripts": {
+    "install:all": "npm install && cd frontend && npm install",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\" --names \"backend,frontend\" --prefix-colors \"bgBlue.bold,bgMagenta.bold\"",
+    "backend": "python -m backend.main",
+    "frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "test": "pytest backend/tests/ -v",
+    "test:frontend": "cd frontend && npm run test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Vellankijay/FinTechProj"
+  },
+  "keywords": [
+    "fintech",
+    "risk-analytics",
+    "ai",
+    "gemini",
+    "fastapi",
+    "react"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

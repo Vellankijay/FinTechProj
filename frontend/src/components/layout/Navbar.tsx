@@ -10,6 +10,7 @@ export default function Navbar() {
     { path: '/summary', label: 'Summary' },
     { path: '/tech', label: 'Tech' },
     { path: '/healthtech', label: 'Healthtech' },
+    { path: '/risk-chat', label: 'AI Chat' },
     { path: '/settings', label: 'Settings' },
   ];
 
