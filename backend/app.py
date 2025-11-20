@@ -1,6 +1,5 @@
 """
 FastAPI application entry point.
-
 Mounts existing backend.py functionality and new chat routes.
 """
 import os
@@ -8,12 +7,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from .routers import chat, chat_confirm
+from .routers import server, health  # This imports your tech portfolio router
 from .infra.secrets import get_config
 
 # Load environment variables from .env file
 env_path = Path(__file__).parent.parent / '.env'
+# print(env_path)
 load_dotenv(dotenv_path=env_path)
 
 # Create FastAPI app
@@ -31,6 +31,8 @@ app.add_middleware(
         "http://localhost:5174",  # Vite dev server (alternate port)
         "http://localhost:3000",  # Alternative dev port
         "http://localhost:8000",  # Backend dev
+        "http://127.0.0.1:5173",  # Explicit 127.0.0.1
+        "http://127.0.0.1:8000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -41,6 +43,10 @@ app.add_middleware(
 app.include_router(chat.router, tags=["Chat"])
 app.include_router(chat_confirm.router, tags=["Chat"])
 
+# Mount tech portfolio risk router - THIS IS THE KEY LINE
+app.include_router(server.router, tags=["Risk_Tech"])
+app.include_router(health.router, tags=["Risk_Health"])
+print("✅ Tech Portfolio Router mounted at /api/tech/portfolio")
 
 @app.get("/")
 async def root():
@@ -51,26 +57,35 @@ async def root():
         "version": "1.0.0",
         "features": {
             "risk_chat": config["FEATURE_RISK_CHAT"]
+        },
+        "endpoints": {
+            "root": "/",
+            "health": "/health",
+            "docs": "/docs",
+            "tech_portfolio": "/api/tech/portfolio"
         }
     }
-
 
 @app.get("/health")
 async def health():
     """Health check endpoint."""
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "service": "FinTech Risk Operations API",
+        "port": 8000
+    }
 
-
-# Optional: If you want to expose backend.py functionality as API endpoints
-# You can import and wrap functions from backend.backend here
-# For example:
-#
-# from .backend import compute_risk
-#
-# @app.post("/api/risk/compute")
-# async def compute_risk_endpoint(symbol: str = None, industry: str = None):
-#     try:
-#         risk_score = compute_risk(symbol=symbol, industry=industry)
-#         return {"risk_score": risk_score}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
+# Add startup event to confirm server is running
+@app.on_event("startup")
+async def startup_event():
+    print("\n" + "="*60)
+    print("🚀 FinTech Risk Operations API Starting")
+    print("="*60)
+    print("📍 Server running on port 8000")
+    print("🔗 Available endpoints:")
+    print("   • Root:             http://localhost:8000/")
+    print("   • Health:           http://localhost:8000/health")
+    print("   • Tech Portfolio:   http://localhost:8000/api/tech/portfolio")
+    print("   • Health Portfolio:   http://localhost:8000/api/health/portfolio")
+    print("   • API Docs:         http://localhost:8000/docs")
+    print("="*60 + "\n")
