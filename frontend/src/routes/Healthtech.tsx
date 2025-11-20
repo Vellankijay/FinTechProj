@@ -5,154 +5,69 @@ import { Donut } from '@/components/charts/Donut';
 import { BarsHorizontal } from '@/components/charts/BarsHorizontal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
-import { mockDataGenerator } from '@/lib/mock/generator';
-import { useSettingsStore } from '@/store/useSettingsStore';
 import { formatCurrency } from '@/lib/utils';
-import { calculateHealthtechRiskScore } from '@/lib/riskCalculator';
 import { AlertCircle } from 'lucide-react';
-import type { KpiMetric } from '@/types';
-import { INDUSTRY_COLORS } from '@/types';
-
-// Healthtech-specific industries
-const HEALTHTECH_INDUSTRIES = [
-  'Medical Technology',
-  'Biotechnology',
-  'Digital Health',
-  'Healthcare IT',
-  'Pharma Tech',
-  'Telemedicine',
-];
 
 export default function Healthtech() {
-  const [refreshKey, setRefreshKey] = useState(0);
-  const mockLiveEnabled = useSettingsStore((state) => state.mockLiveEnabled);
-
-  // Subscribe to live updates for continuous data refreshing
-  useEffect(() => {
-    if (mockLiveEnabled) {
-      mockDataGenerator.startLiveUpdates(true);
-      const unsubscribe = mockDataGenerator.subscribe(() => {
-        setRefreshKey((k) => k + 1);
-      });
-      return () => {
-        unsubscribe();
-      };
-    }
-  }, [mockLiveEnabled]);
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['healthtech-positions-data', refreshKey],
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['health-portfolio'],
     queryFn: async () => {
-      const allPositions = mockDataGenerator.getSymbolPositions();
-
-      // Filter for healthtech industries only
-      const positions = allPositions.filter((p) => HEALTHTECH_INDUSTRIES.includes(p.industry));
-
-      // Calculate totals
-      const totalMarketValue = positions.reduce((sum, p) => sum + p.marketValue, 0);
-      const avgPriceChange = positions.reduce((sum, p) => sum + p.priceChangePercent, 0) / (positions.length || 1);
-      const avgVolatility = positions.reduce((sum, p) => sum + p.highLowSpread, 0) / (positions.length || 1);
-
-      const kpis: KpiMetric[] = [
-        {
-          id: 'total-value',
-          label: 'Total Healthtech Investment',
-          value: totalMarketValue,
-          unit: '$',
-          change: 3.2,
-          trend: 'up',
-          status: 'normal',
-        },
-        {
-          id: 'positions',
-          label: 'Number of Companies',
-          value: positions.length,
-          change: 0,
-          trend: 'neutral',
-          status: 'normal',
-        },
-        {
-          id: 'avg-performance',
-          label: 'Average Price Change',
-          value: avgPriceChange,
-          unit: '%',
-          change: 4.8,
-          trend: avgPriceChange > 0 ? 'up' : 'down',
-          status: avgPriceChange > 0 ? 'normal' : 'warning',
-        },
-        {
-          id: 'volatility',
-          label: 'Average Volatility',
-          value: avgVolatility * 100,
-          unit: '%',
-          change: -1.2,
-          trend: 'down',
-          status: 'normal',
-        },
-      ];
-
-      // Industry breakdown
-      const byIndustry: Record<string, number> = {};
-      positions.forEach((p) => {
-        byIndustry[p.industry] = (byIndustry[p.industry] || 0) + p.marketValue;
-      });
-
-      const donutData = Object.entries(byIndustry).map(([name, value]) => ({
-        name,
-        value,
-        percentage: totalMarketValue > 0 ? (value / totalMarketValue) * 100 : 0,
-        color: (INDUSTRY_COLORS as any)[name] || '#22c55e',
-      }));
-
-      // Top companies by market value
-      const topCompanies = [...positions]
-        .sort((a, b) => b.marketValue - a.marketValue)
-        .slice(0, 10)
-        .map((p) => ({
-          bucket: p.symbol,
-          count: p.marketValue,
-          percentage: totalMarketValue > 0 ? (p.marketValue / totalMarketValue) * 100 : 0,
-          color: '#22c55e',
-        }));
-
-      // Performance distribution
-      const performanceRanges = [
-        { label: 'Strong Growth (>5%)', min: 5, max: Infinity },
-        { label: 'Growth (0-5%)', min: 0, max: 5 },
-        { label: 'Decline (0 to -5%)', min: -5, max: 0 },
-        { label: 'Strong Decline (<-5%)', min: -Infinity, max: -5 },
-      ];
-
-      const performanceData = performanceRanges.map(({ label, min, max }) => {
-        const count = positions.filter((p) => p.priceChangePercent > min && p.priceChangePercent <= max).length;
-        return {
-          bucket: label,
-          count,
-          percentage: (count / (positions.length || 1)) * 100,
-          color: min > 0 ? '#22c55e' : max < 0 ? '#ef4444' : '#eab308',
-        };
-      });
-
-      // Count positive vs negative performers
-      const positivePerformers = positions.filter((p) => p.priceChangePercent > 0).length;
-      const negativePerformers = positions.filter((p) => p.priceChangePercent <= 0).length;
-
-      // Calculate Risk Score
-      const riskScore = calculateHealthtechRiskScore({
-        totalMarketValue,
-        avgPriceChange,
-        avgVolatility,
-        numCompanies: positions.length,
-        industryDiversification: Object.keys(byIndustry).length,
-        performanceDistribution: { positive: positivePerformers, negative: negativePerformers },
-      });
-
-      return { kpis, donutData, topCompanies, performanceData, totalMarketValue, riskScore };
+      console.log('🔍 Fetching healthcare data...');
+      
+      // Try the full backend URL
+      const url = 'http://localhost:8000/api/health/portfolio';
+      console.log('Fetching from:', url);
+      
+      const response = await fetch(url);
+      
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch healthtech data: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('✅ Data received:', data);
+      console.log('KPIs:', data.kpis);
+      console.log('Total Market Value:', data.totalMarketValue);
+      console.log('Donut Data:', data.donutData);
+      console.log('Top Companies:', data.topCompanies);
+      
+      return data;
     },
-    staleTime: mockLiveEnabled ? 0 : 30000,
-    refetchInterval: mockLiveEnabled ? 800 : false,
-    placeholderData: (previousData) => previousData,
+    staleTime: 30000,
+    retry: 1,
   });
+
+  // Log whenever data changes
+  useEffect(() => {
+    console.log('Data state updated:', data);
+  }, [data]);
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card className="p-6 border-red-500">
+          <h2 className="text-xl font-bold text-red-500 mb-2">Error Loading Data</h2>
+          <p className="text-sm mb-4">{error.message}</p>
+          <pre className="text-xs bg-muted p-4 rounded overflow-auto">
+            {JSON.stringify(error, null, 2)}
+          </pre>
+          <div className="mt-4">
+            <p className="text-sm font-semibold">Troubleshooting:</p>
+            <ul className="text-xs list-disc list-inside mt-2 space-y-1">
+              <li>Check if backend is running on http://localhost:8000</li>
+              <li>Visit http://localhost:8000/api/health/portfolio in your browser</li>
+              <li>Check browser console for CORS errors</li>
+              <li>Verify backend CORS settings allow your frontend origin</li>
+            </ul>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -164,6 +79,9 @@ export default function Healthtech() {
           </p>
         </div>
       </div>
+
+      {/* Debug Info - Remove this after fixing */}
+      
 
       {/* KPI Cards */}
       {isLoading ? (
@@ -286,12 +204,16 @@ export default function Healthtech() {
           <div className="h-[400px]">
             {isLoading ? (
               <Skeleton className="w-full h-full" />
-            ) : (
+            ) : data?.donutData && data.donutData.length > 0 ? (
               <Donut
-                data={data?.donutData || []}
+                data={data.donutData}
                 centerLabel="Total"
-                centerValue={formatCurrency(data?.totalMarketValue || 0, 0)}
+                centerValue={formatCurrency(data.totalMarketValue || 0, 0)}
               />
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                No industry data available
+              </div>
             )}
           </div>
         </Card>
@@ -305,8 +227,12 @@ export default function Healthtech() {
           <div className="h-[400px]">
             {isLoading ? (
               <Skeleton className="w-full h-full" />
+            ) : data?.topCompanies && data.topCompanies.length > 0 ? (
+              <BarsHorizontal data={data.topCompanies} />
             ) : (
-              <BarsHorizontal data={data?.topCompanies || []} />
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                No company data available
+              </div>
             )}
           </div>
         </Card>
@@ -321,8 +247,12 @@ export default function Healthtech() {
         <div className="h-[300px]">
           {isLoading ? (
             <Skeleton className="w-full h-full" />
+          ) : data?.performanceData && data.performanceData.length > 0 ? (
+            <BarsHorizontal data={data.performanceData} />
           ) : (
-            <BarsHorizontal data={data?.performanceData || []} />
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              No performance data available
+            </div>
           )}
         </div>
       </Card>
