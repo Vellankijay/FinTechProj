@@ -8,7 +8,9 @@ from ..infra.secrets import vault
 from ..infra.types import GeminiResponse, ToolCall
 
 
+# ---------------------------------------------------------
 # Configure Gemini
+# ---------------------------------------------------------
 def _get_gemini_model():
     """Initialize Gemini model with API key."""
     api_key = vault("GEMINI_API_KEY", required=True)
@@ -17,40 +19,34 @@ def _get_gemini_model():
     return genai.GenerativeModel('gemini-2.0-flash-exp')
 
 
-def _convert_tool_to_gemini_schema(tool_name: str, tool_info: Dict[str, Any]) -> genai.protos.FunctionDeclaration:
+# ---------------------------------------------------------
+# Convert internal tool definitions to Gemini schema
+# ---------------------------------------------------------
+def _convert_tool_to_gemini_schema(tool_name: str, tool_info: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Convert internal tool definition to Gemini function declaration schema.
+    Convert internal tool definition to Gemini function declaration schema (dict-based).
 
     Args:
         tool_name: Name of the tool
         tool_info: Tool metadata with description and parameters
 
     Returns:
-        Gemini-compatible function declaration protobuf
+        Dictionary representing Gemini-compatible function declaration
     """
-    # Build properties for parameters
-    properties = {}
-    for param_name, param_info in tool_info.get("parameters", {}).items():
-        prop_dict = {
-            "type_": param_info.get("type", "string").upper(),  # STRING, NUMBER, etc.
-            "description": param_info.get("description", "")
+    return {
+        "name": tool_name,
+        "description": tool_info.get("description", ""),
+        "parameters": {
+            "type": "object",
+            "properties": tool_info.get("parameters", {}),
+            "required": tool_info.get("required", [])
         }
-        properties[param_name] = genai.protos.Schema(**prop_dict)
-
-    # Build parameters schema
-    parameters = genai.protos.Schema(
-        type_=genai.protos.Type.OBJECT,
-        properties=properties,
-        required=tool_info.get("required", [])
-    )
-
-    return genai.protos.FunctionDeclaration(
-        name=tool_name,
-        description=tool_info.get("description", ""),
-        parameters=parameters
-    )
+    }
 
 
+# ---------------------------------------------------------
+# Chat with tools
+# ---------------------------------------------------------
 def chat_with_tools(
     system: str,
     tools: Dict[str, Dict[str, Any]],
@@ -68,19 +64,6 @@ def chat_with_tools(
 
     Returns:
         GeminiResponse with text and tool_calls
-
-    Example:
-        tools = {
-            "get_metric": {
-                "description": "Get risk metric for a book",
-                "parameters": {
-                    "book": {"type": "string", "description": "Book name"},
-                    "metric": {"type": "string", "description": "Metric type"}
-                },
-                "required": ["book", "metric"]
-            }
-        }
-        response = chat_with_tools(system, tools, context, messages)
     """
     try:
         model = _get_gemini_model()
@@ -106,25 +89,23 @@ You can call the following tools to help answer questions:
             content = msg.get("content", "")
             full_prompt += f"\n{role.upper()}: {content}\n"
 
-        # Convert tools to Gemini function declarations
+        # Convert tools to Gemini function declaration dicts
         gemini_tools = [
             _convert_tool_to_gemini_schema(name, info)
             for name, info in tools.items()
         ]
 
-        # Create Gemini tools configuration
+        # Configure generation
         generation_config = {
             "temperature": 0.7,
             "max_output_tokens": 2048,
         }
 
-        # Generate response
+        # Generate response with or without tools
         if gemini_tools:
-            # Create Tool object with function declarations
-            tool = genai.protos.Tool(function_declarations=gemini_tools)
             response = model.generate_content(
                 full_prompt,
-                tools=[tool],
+                tools=[{"function_declarations": gemini_tools}],
                 generation_config=generation_config
             )
         else:
@@ -133,52 +114,40 @@ You can call the following tools to help answer questions:
                 generation_config=generation_config
             )
 
-        # Parse response
+        # Parse tool calls
         tool_calls = []
-
-        # Check if there are function calls in the response
-        if hasattr(response, 'candidates') and response.candidates:
+        if getattr(response, "candidates", None):
             candidate = response.candidates[0]
-            if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+            if getattr(candidate, "content", None) and getattr(candidate.content, "parts", None):
                 for part in candidate.content.parts:
-                    if hasattr(part, 'function_call'):
+                    if getattr(part, "function_call", None):
                         fc = part.function_call
                         tool_calls.append(ToolCall(
                             name=fc.name,
                             args=dict(fc.args) if fc.args else {}
                         ))
 
-        # Get text response
-        text_response = ""
-        try:
-            # Try to get text from response
-            if hasattr(response, 'text') and response.text:
-                text_response = response.text
-        except ValueError:
-            # If response has function calls but no text, that's expected
-            pass
+        # Parse text response
+        text_response = getattr(response, "text", "")
+        if not text_response:
+            if tool_calls:
+                text_response = "Let me check that for you..."
+            else:
+                text_response = "I understand. How can I help you with risk operations?"
 
-        # If there are tool calls but no text, provide a default message
-        if tool_calls and not text_response:
-            text_response = "Let me check that for you..."
-        elif not tool_calls and not text_response:
-            # If no tool calls and no text, provide a default message
-            text_response = "I understand. How can I help you with risk operations?"
-
-        return GeminiResponse(
-            text=text_response,
-            tool_calls=tool_calls
-        )
+        return GeminiResponse(text=text_response, tool_calls=tool_calls)
 
     except Exception as e:
         print(f"[ERROR] Gemini API error: {e}")
-        # Return error response
         return GeminiResponse(
             text=f"I encountered an error processing your request: {str(e)}",
             tool_calls=[]
         )
 
 
+# ---------------------------------------------------------
+# Continue conversation after executing a tool
+# ---------------------------------------------------------
 def continue_with_tool_result(
     system: str,
     tools: Dict[str, Dict[str, Any]],
@@ -201,7 +170,6 @@ def continue_with_tool_result(
     Returns:
         GeminiResponse with final text
     """
-    # Add tool result to conversation
     messages = previous_messages + [
         {
             "role": "assistant",

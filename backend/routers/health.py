@@ -1,15 +1,19 @@
 import yfinance as yf
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from datetime import datetime
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/health")
 
-HEALTHCARE_SYMBOLS = [
-    "UNH", "JNJ", "LLY", "PFE", "MRK", "ABBV",
-    "AMGN", "TMO", "GILD", "BMY"
-]
+# ------------------------------
+# SYMBOLS & INDUSTRY MAP
+# ------------------------------
+HEALTHCARE_SYMBOLS = {
+    "UNH": 1, "JNJ": 1, "LLY": 1, "PFE": 1, "MRK": 1,
+    "ABBV": 1, "AMGN": 1, "TMO": 1, "GILD": 1, "BMY": 1
+}
 
 HEALTHCARE_INDUSTRY_MAP = {
     "UNH": "Healthcare Insurance",
@@ -30,94 +34,73 @@ INDUSTRY_COLORS = {
     "Medical Technology": "#22c55e",
     "Healthcare Insurance": "#ef4444",
 }
+
+
+# ------------------------------
+# GLOBAL CACHE & STORE
+# ------------------------------
 historical_cache = {}
 today_cache = {}
 TODAY_CACHE_EXPIRY_HOURS = 3
+cs = []
 
-# ------------------------------
-# RISK CALCULATION ENGINE
-# ------------------------------
-
-def get_today_price(symbol):
-    """
-    Fetches only today's price (1d data) with 3-hour cache.
-    Does NOT modify the historical 3-month cache.
-    """
-    now = datetime.now()
-
-    # If cached and fresh → return cached value
-    if symbol in today_cache:
-        last_update = today_cache[symbol]["last_update"]
-        age_hours = (now - last_update).total_seconds() / 3600
-
-        if age_hours < TODAY_CACHE_EXPIRY_HOURS:
-            return today_cache[symbol]["data"]
-
-    # Fetch fresh today's data
-    tdy = yf.Ticker(symbol).history(period="1d")
-    tdy.index = pd.to_datetime(tdy.index, errors="coerce")
-
-# Now safely remove timezone (this NEVER errors for DatetimeIndex)
-    tdy.index = tdy.index.tz_localize(None)
-
-    if tdy.empty:
-        raise ValueError(f"Failed to pull today's data for {symbol}")
-
-    # Update cache
-    today_cache[symbol] = {
-        "data": tdy,
-        "last_update": now
+companies_store = {}
+for s in HEALTHCARE_SYMBOLS.keys():
+    companies_store[s] = {
+        "ticker": s,
+        "name": s,
+        "shares": HEALTHCARE_SYMBOLS[s],
+        "active": True
     }
 
-    return tdy
+# ------------------------------
+# HELPERS
+# ------------------------------
+def safe_float(val, fallback=0.0):
+    try:
+        if val is None or np.isnan(val):
+            return fallback
+        return float(val)
+    except Exception:
+        return fallback
 
+def get_today_price(symbol: str) -> float:
+    now = datetime.now()
+    if symbol in today_cache:
+        last_update = today_cache[symbol]["last_update"]
+        if (now - last_update).total_seconds() / 3600 < TODAY_CACHE_EXPIRY_HOURS:
+            return today_cache[symbol]["data"]
+    try:
+        t = yf.Ticker(symbol)
+        last = safe_float(t.fast_info.last_price, fallback=None)
+        if last is None:
+            hist = t.history(period="2d")
+            if not hist.empty:
+                last = safe_float(hist["Close"].iloc[-1])
+    except Exception:
+        last = None
+    if last is None:
+        raise ValueError(f"Failed to fetch today's price for {symbol}")
+    today_cache[symbol] = {"data": last, "last_update": now}
+    return last
 
-def get_historical(symbol) -> pd.DataFrame:
-    today_str = pd.Timestamp.today().strftime("%Y-%m-%d")
-
+def get_historical(symbol: str) -> pd.DataFrame:
     if symbol not in historical_cache:
         df = yf.Ticker(symbol).history(period="3mo")
         df.index = pd.to_datetime(df.index, errors="coerce")
-
-# Now safely remove timezone (this NEVER errors for DatetimeIndex)
         df.index = df.index.tz_localize(None)
-
         historical_cache[symbol] = df
-        return df
-
-    df = historical_cache[symbol]
-
-    if today_str in df.index.strftime("%Y-%m-%d"):
-        return df
-
-    today_data = yf.Ticker(symbol).history(period="1d")
-    today_data.index = pd.to_datetime(today_data.index, errors="coerce")
-
-# Now safely remove timezone (this NEVER errors for DatetimeIndex)
-    today_data.index = today_data.index.tz_localize(None)
-    if not today_data.empty:
-        df = pd.concat([df, today_data])
-        df = df[~df.index.duplicated(keep="last")]
-
-        cutoff = pd.Timestamp.today() - pd.Timedelta(days=90)
-
-        df = df[df.index >= cutoff]
-
-        historical_cache[symbol] = df
-    
-    return df
-
-def calculate_healthcare_risk(total_mv, avg_perf, avg_vol, num_companies, diversification, perf_split):
+    return historical_cache[symbol]
+def calculate_tech_risk(total_mv, avg_perf, avg_vol, num_companies, diversification, perf_split):
     """
     Returns: full risk object with score, rating, and factor breakdown
+    avg_vol should be decimal (e.g. 0.15 for 15%)
     """
-
     diversification_score = min(100, diversification * 15)   # more industries = safer
-    volatility_score = max(0, 100 - (avg_vol * 400))
+    volatility_score = max(0, 100 - (avg_vol * 100))         # avg_vol decimal -> percent contribution
     performance_score = (perf_split["positive"] / max(1, num_companies)) * 100
     exposure_score = min(100, (perf_split["positive"] / max(1, perf_split["negative"])) * 40)
 
-    # Weighted portfolio score (percent system)
     final_score = (
         diversification_score * 0.25 +
         volatility_score * 0.30 +
@@ -125,7 +108,6 @@ def calculate_healthcare_risk(total_mv, avg_perf, avg_vol, num_companies, divers
         exposure_score * 0.20
     )
 
-    # Convert color & rating
     if final_score >= 80:
         rating, color = "Low Risk", "#22c55e"
     elif final_score >= 60:
@@ -145,7 +127,7 @@ def calculate_healthcare_risk(total_mv, avg_perf, avg_vol, num_companies, divers
             "diversification": {
                 "score": int(diversification_score),
                 "weight": 25,
-                "explanation": f"Portfolio spans {diversification} healthcare industries."
+                "explanation": f"Portfolio spans {diversification} industries."
             },
             "volatility": {
                 "score": int(volatility_score),
@@ -165,98 +147,193 @@ def calculate_healthcare_risk(total_mv, avg_perf, avg_vol, num_companies, divers
         }
     }
 
+def compute_company_risk(price_series: pd.Series) -> dict:
+    returns = price_series.pct_change().dropna()
+    if returns.empty:
+        return {"volatility": 0, "performance": 0, "score": 0, "rating": "Insufficient Data", "perf3m": 0.0}
+    vol_3m = safe_float(returns.std() * np.sqrt(63))
+    perf = safe_float((price_series.iloc[-1] - price_series.iloc[0]) / price_series.iloc[0])
+    vol_pct = vol_3m * 100
+    perf_pct = perf * 100
+    if vol_3m == 0:
+        rating, score = "No Risk", 100
+    elif vol_3m < 0.18 and perf > 0:
+        rating, score = "Low Risk", 80
+    elif vol_3m < 0.25:
+        rating, score = "Moderate Risk", 60
+    elif vol_3m < 0.35:
+        rating, score = "Elevated Risk", 40
+    else:
+        rating, score = "High Risk", 20
+    return {"volatility": vol_pct, "performance": perf_pct, "score": score, "rating": rating, "perf3m": perf}
 
 # ------------------------------
-# MAIN ENDPOINT
+# Pydantic Models
 # ------------------------------
+class UpdateSharesItem(BaseModel):
+    ticker: str
+    shares: int
 
+class AddCompanyItem(BaseModel):
+    ticker: str
+    sector: str
+    shares: int = 1
+    name: str = None
+
+# ------------------------------
+# ENDPOINTS
+# ------------------------------
+@router.get("/companies")
+def list_companies():
+    global cs
+    if cs:
+        return cs
+    return health_portfolio()
+
+@router.post("/add")
+def add_company(payload: AddCompanyItem):
+    t = payload.ticker.upper()
+    if t in companies_store and companies_store[t]["active"]:
+        raise HTTPException(status_code=400, detail="Ticker already exists.")
+    companies_store[t] = {
+        "ticker": t,
+        "name": payload.name or t,
+        "sector": payload.sector,
+        "shares": payload.shares,
+        "active": True
+    }
+    historical_cache.pop(t, None)
+    today_cache.pop(t, None)
+    HEALTHCARE_SYMBOLS[t] = payload.shares
+    global cs
+    cs = []
+    return {"status": "ok", "company": companies_store[t]}
+
+@router.patch("/update-shares")
+def update_shares(changes: list[UpdateSharesItem]):
+    global cs
+    updated = []
+    for item in changes:
+        t = item.ticker.upper()
+        if t not in companies_store:
+            continue
+        companies_store[t]["shares"] = item.shares
+        HEALTHCARE_SYMBOLS[t] = item.shares
+        updated.append({"ticker": t, "shares": item.shares})
+    cs = []
+    return {"status": "ok", "updated": updated}
+
+@router.delete("/remove/{ticker}")
+def remove_company(ticker: str):
+    t = ticker.upper()
+    if t not in companies_store:
+        raise HTTPException(status_code=404, detail="Ticker not found")
+    companies_store[t]["active"] = False
+    today_cache.pop(t, None)
+    historical_cache.pop(t, None)
+    HEALTHCARE_SYMBOLS.pop(t, None)
+    global cs
+    cs = []
+    return {"status": "ok", "ticker": t}
+
+# ------------------------------
+# MAIN ENDPOINT (portfolio)
+# ------------------------------
 @router.get("/portfolio")
-def healthcare_portfolio():
+def health_portfolio():
+    global cs
     companies = []
     industries = {}
-    total_market_value = 0
-    vol_sum = 0
-    perf_sum = 0
-
+    total_market_value = 0.0
+    per_stock_vol_pct = {}
+    returns_map = {}
     positive = negative = 0
+    overall_change = 0.0
 
-    for symbol in HEALTHCARE_SYMBOLS:
-        hist = get_historical(symbol)
-
-        if hist.empty:
+    for ticker, shares in HEALTHCARE_SYMBOLS.items():
+        hist = get_historical(ticker)
+        if hist.empty or len(hist) < 2:
             continue
 
-    # NEW — get only today's price
-        td = get_today_price(symbol)
+        today_close = safe_float(hist["Close"].iloc[-1])
+        yesterday_close = safe_float(hist["Close"].iloc[-2])
+        daily_change = 0.0 if yesterday_close == 0 else (today_close - yesterday_close) / yesterday_close * 100
+        overall_change += daily_change
 
-    # Today’s close and yesterday’s close
-        today_close = float(td["Close"].iloc[-1])
-        yesterday_close = float(hist["Close"].iloc[-1])  # last price from historical
+        pos_mv = shares * today_close
+        total_market_value += pos_mv
 
-    # Compute daily % change
-        daily_change = (today_close - yesterday_close) / yesterday_close * 100
+        try:
+            info = yf.Ticker(ticker).info
+            industry = info.get("industry") or HEALTHCARE_INDUSTRY_MAP.get(ticker, "Other")
+        except Exception:
+            industry = HEALTHCARE_INDUSTRY_MAP.get(ticker, "Other")
+        industries[industry] = industries.get(industry, 0.0) + pos_mv
 
-    # 3-month metrics using historical data
-        returns = hist["Close"].pct_change().dropna()
-        vol = float(returns.std())
-        perf_3m = float((hist["Close"][-1] - hist["Close"][0]) / hist["Close"][0])
-        # print(perf_3m)
-
-        info = yf.Ticker(symbol).info
-        market_cap = info.get("marketCap", 0)
-
-        industry = HEALTHCARE_INDUSTRY_MAP.get(symbol, "Healthcare")
-
-    # Aggregations
-        total_market_value += market_cap
-        vol_sum += vol
-        perf_sum += perf_3m
-
-        if perf_3m >= 0:
+        company_risk = compute_company_risk(hist["Close"])
+        if company_risk["perf3m"] >= 0:
             positive += 1
         else:
             negative += 1
 
+        returns = hist["Close"].pct_change().dropna()
+        if not returns.empty:
+            returns_map[ticker] = returns.rename(ticker)
+        per_stock_vol_pct[ticker] = safe_float(company_risk["volatility"]/100)
+
         companies.append({
-            "symbol": symbol,
+            "ticker": ticker,
+            "name": companies_store[ticker].get("name", ticker),
             "industry": industry,
-            "marketValue": market_cap,
-            "priceChangePercent": perf_3m,
-            "highLowSpread": vol,
+            "marketValue": pos_mv,
+            "priceToday": today_close,
+            "priceYesterday": yesterday_close,
+            "dailyChangePercent": daily_change,
+            "priceChangePercent": company_risk["perf3m"],
+            "shares": shares,
+            "companyVolatility": company_risk["volatility"],
+            "companyPerformance": company_risk["performance"],
+            "companyRiskScore": company_risk["score"],
+            "companyRiskRating": company_risk["rating"],
         })
 
-        industries[industry] = industries.get(industry, 0) + market_cap
-
     num_companies = len(companies)
-    # print(len(companies))
-    diversification = len(industries)
+    avg_individual_vol_decimal = sum(per_stock_vol_pct.values()) / num_companies if num_companies else 0.0
+    rets_df = pd.concat(returns_map.values(), axis=1).dropna(how="all") if returns_map else pd.DataFrame()
 
-    avg_perf = perf_sum / max(1, num_companies)
-    avg_vol = vol_sum / max(1, num_companies)
+    # Portfolio volatility
+    portfolio_vol_3m = 0.0
+    if not rets_df.empty and total_market_value > 0:
+        cov_daily = rets_df.cov().fillna(0).values
+        weights = np.array([companies_store[t]["shares"]*get_today_price(t)/total_market_value for t in rets_df.columns], dtype=float)
+        port_var_daily = float(weights @ cov_daily @ weights.T)
+        portfolio_vol_3m = np.sqrt(max(0.0, port_var_daily)) * np.sqrt(63)
+    if portfolio_vol_3m == 0.0:
+        portfolio_vol_3m = avg_individual_vol_decimal
 
-    risk = calculate_healthcare_risk(
+    avg_perf_decimal = np.mean([c["priceChangePercent"] for c in companies]) if num_companies else 0.0
+    avg_change = round(overall_change / max(1, num_companies), 3)
+
+    # Compute risk
+    from copy import deepcopy
+    risk = calculate_tech_risk(
         total_mv=total_market_value,
-        avg_perf=avg_perf,
-        avg_vol=avg_vol,
+        avg_perf=avg_perf_decimal,
+        avg_vol=portfolio_vol_3m,
         num_companies=num_companies,
-        diversification=diversification,
-        perf_split={"positive": positive, "negative": negative},
+        diversification=len(industries),
+        perf_split={"positive": positive, "negative": negative}
     )
-    # print(risk)
 
-    # ------------------------------
-    # VISUALIZATION DATA SHAPES
-    # ------------------------------
-
-    # KPI metrics for frontend
+    # Portfolio KPIs
     kpis = [
         {
             "id": "total-value",
             "label": "Total Healthcare Investment",
             "value": total_market_value,
             "unit": "$",
-            "change": 2.1,
-            "trend": "up",
+            "change": avg_change,
+            "trend": "up" if overall_change > 0 else ("neutral" if overall_change == 0 else "down"),
             "status": "normal",
         },
         {
@@ -270,54 +347,53 @@ def healthcare_portfolio():
         {
             "id": "avg-performance",
             "label": "Average 3-Month Performance",
-            "value": avg_perf,
+            "value": avg_perf_decimal,
             "unit": "%",
-            "change": 1.8,
-            "trend": "up" if avg_perf > 0 else "down",
-            "status": "normal" if avg_perf > 0 else "warning",
+            "change": "Positive Growth" if avg_perf_decimal > 0.025 else "Neutral",
+            "trend": "up" if avg_perf_decimal > 0 else "down",
+            "status": "normal" if avg_perf_decimal > 0 else "warning",
         },
         {
             "id": "volatility",
             "label": "Average Volatility",
-            "value": avg_vol * 100,
+            "value": portfolio_vol_3m,
             "unit": "%",
-            "change": -0.5,
-            "trend": "down",
+            "change": "Low" if portfolio_vol_3m < 0.18 else ("High" if portfolio_vol_3m > 0.28 else "Neutral"),
+            "trend": "up" if portfolio_vol_3m < 0.18 else ("down" if portfolio_vol_3m > 0.28 else "neutral"),
             "status": "normal",
         },
     ]
-    print(avg_perf)
-    # Donut chart
+
+    # Donut chart data
     donut = [
         {
             "name": ind,
             "value": val,
-            "percentage": (val / total_market_value) * 100,
+            "percentage": (val / total_market_value) * 100 if total_market_value > 0 else 0,
             "color": INDUSTRY_COLORS.get(ind, "#22c55e"),
         }
         for ind, val in industries.items()
     ]
 
-    # Top companies
+    # Top companies by market value
     top = sorted(companies, key=lambda x: x["marketValue"], reverse=True)[:10]
     top_companies = [
         {
-            "bucket": c["symbol"],
+            "bucket": c["ticker"],
             "count": c["marketValue"],
-            "percentage": (c["marketValue"] / total_market_value) * 100,
+            "percentage": (c["marketValue"] / total_market_value) * 100 if total_market_value > 0 else 0,
             "color": "#22c55e",
         }
         for c in top
     ]
 
-    # Performance distribution
+    # Performance buckets
     perf_ranges = [
-        ("Strong Growth (>5%)", 5, 9999, "#22c55e"),
-        ("Growth (0-5%)", 0, 5, "#3b82f6"),
-        ("Decline (0 to -5%)", -5, 0, "#eab308"),
-        ("Strong Decline (<-5%)", -9999, -5, "#ef4444"),
+        ("Strong Growth (>5%)", 0.05, 9999, "#22c55e"),
+        ("Growth (0-5%)", 0.0, 0.05, "#3b82f6"),
+        ("Decline (0 to -5%)", -0.05, 0.0, "#eab308"),
+        ("Strong Decline (<-5%)", -9999, -0.05, "#ef4444"),
     ]
-
     performance_data = []
     for label, minv, maxv, color in perf_ranges:
         count = len([c for c in companies if minv < c["priceChangePercent"] <= maxv])
@@ -328,11 +404,15 @@ def healthcare_portfolio():
             "color": color,
         })
 
+    cs = deepcopy(companies)
     return {
         "kpis": kpis,
+        "companies": companies,
         "donutData": donut,
         "topCompanies": top_companies,
         "performanceData": performance_data,
         "totalMarketValue": total_market_value,
         "riskScore": risk,
     }
+
+
