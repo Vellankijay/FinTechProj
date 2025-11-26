@@ -36,7 +36,7 @@ export function KpiStrip({ metrics }: KpiStripProps) {
                 {metric.trend === 'up' && <ArrowUp className="h-5 w-5" />}
                 {metric.trend === 'down' && <ArrowDown className="h-5 w-5" />}
                 {metric.trend === 'neutral' && <Minus className="h-5 w-5" />}
-                <span className="text-base">{Math.abs(metric.change).toFixed(1)}%</span>
+                <span className="text-base">{(metric.change)}</span>
               </div>
             )}
           </div>

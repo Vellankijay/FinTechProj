@@ -69,7 +69,7 @@ export interface KpiMetric {
   label: string;
   value: number;
   unit?: string;
-  change?: number; // % change
+  change?: string; // % change
   trend?: 'up' | 'down' | 'neutral';
   status?: 'normal' | 'warning' | 'critical';
   sparkline?: number[]; // Historical values for mini chart
