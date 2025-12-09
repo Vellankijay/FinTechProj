@@ -1,13 +1,15 @@
 """
-Chat endpoint for risk operations assistant.
+Chat endpoint for risk operations assistant with company intelligence.
 """
 import time
 import uuid
-from typing import Dict, Any
+import requests
+from typing import Dict, Any, List, Tuple
 from fastapi import APIRouter, HTTPException, status
+from textblob import TextBlob
 
 from ..infra.types import ChatRequest, ChatResponse
-from ..infra.secrets import get_config
+from ..infra.secrets import get_config, vault
 from ..services import rbac, guardrails, gemini_client, runbooks
 from ..tools import risk_api, oms, clickhouse_client
 
@@ -28,14 +30,16 @@ SYSTEM_PROMPT = """You are a real-time trading risk operations assistant for a F
 - Run stress tests and scenario analysis
 - Provide operational runbooks for risk scenarios (including data latency, order-flow anomaly, VaR breach, etc.)
 - Execute emergency actions (with confirmation)
+- Perform real-time company intelligence analysis including news sentiment and insider trading activity
 
 ## Response Guidelines
 1. For greetings or casual conversation: Respond naturally and briefly
 2. For questions about functionality: Explain what you can do clearly
 3. For risk queries: Be numerate, cite data sources (metric names + timestamps)
-4. For operational guidance: Use clear step-by-step format - call get_runbook tool for investigation procedures
-5. For dangerous actions: Always require explicit confirmation
-6. When users ask "walk me through" or "steps to investigate": Use get_runbook tool with the relevant scenario
+4. For company intelligence: Present sentiment analysis, insider trading trends, and aggregate scores
+5. For operational guidance: Use clear step-by-step format - call get_runbook tool for investigation procedures
+6. For dangerous actions: Always require explicit confirmation
+7. When users ask "walk me through" or "steps to investigate": Use get_runbook tool with the relevant scenario
 
 ## Formatting
 - Use **bold** for important metrics and values
@@ -64,6 +68,240 @@ def _build_context(user_id: str) -> Dict[str, Any]:
     }
 
 
+def _get_nyt_sentiment(company_name: str) -> Dict[str, Any]:
+    """Fetch trending articles from NYT and perform sentiment analysis."""
+    try:
+        nyt_api_key = vault("NYT_KEY", required=True)
+        url = "https://api.nytimes.com/svc/search/v2/articlesearch.json"
+        
+        # Calculate begin_date 90 days ago in YYYYMMDD format
+        from datetime import datetime, timedelta
+        begin_date = (datetime.now() - timedelta(days=90)).strftime("%Y%m%d")
+        
+        params = {
+            "q": company_name,
+            "api-key": nyt_api_key,
+            "sort": "newest",
+            "fl": "headline,snippet,pub_date,web_url",
+            "begin_date": begin_date,
+            "page": 0
+        }
+        print(f"[DEBUG] NYT API request params: begin_date={begin_date}")
+        
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        articles = response.json().get("response", {}).get("docs", [])[:10]
+        
+        sentiments = []
+        for article in articles:
+            text = f"{article.get('headline', {}).get('main', '')} {article.get('snippet', '')}"
+            if text.strip():
+                blob = TextBlob(text)
+                sentiments.append(blob.sentiment.polarity)
+        
+        avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0.0
+        
+        return {
+            "source": "NYT",
+            "article_count": len(articles),
+            "sentiment_score": round(avg_sentiment, 3),
+            "sentiment_label": "Positive" if avg_sentiment > 0.1 else "Negative" if avg_sentiment < -0.1 else "Neutral",
+            "articles_analyzed": len(sentiments)
+        }
+    except KeyError as e:
+        error_msg = f"NYT_API_KEY missing from vault: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        return {"error": error_msg, "sentiment_score": 0.0, "missing_key": "NYT_API_KEY"}
+    except requests.exceptions.Timeout:
+        error_msg = "NYT API request timed out (10s timeout)"
+        print(f"[ERROR] {error_msg}")
+        return {"error": error_msg, "sentiment_score": 0.0, "timeout": True}
+    except requests.exceptions.HTTPError as e:
+        error_msg = f"NYT API HTTP error: {e.response.status_code} - {e.response.text}"
+        print(f"[ERROR] {error_msg}")
+        return {"error": error_msg, "sentiment_score": 0.0, "http_error": e.response.status_code}
+    except requests.exceptions.RequestException as e:
+        error_msg = f"NYT API request failed: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        return {"error": error_msg, "sentiment_score": 0.0}
+    except Exception as e:
+        error_msg = f"NYT sentiment analysis failed: {type(e).__name__}: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        return {"error": error_msg, "sentiment_score": 0.0}
+
+
+def _get_insider_trading_sentiment(ticker: str) -> Dict[str, Any]:
+    """Fetch insider trading data from Finnhub and Alpha Vantage."""
+    try:
+        finnhub_api_key = vault("FINNHUB_KEY", required=True)
+    except KeyError as e:
+        print(f"[ERROR] FINNHUB_API_KEY missing from vault: {str(e)}")
+        return {"error": "FINNHUB_API_KEY missing", "finnhub": {"error": "Missing API key"}, "alphavantage": {"error": "Not checked"}}
+    
+    try:
+        alpha_vantage_key = vault("ALPHA_KEY", required=True)
+    except KeyError as e:
+        print(f"[ERROR] ALPHAVANTAGE_API_KEY missing from vault: {str(e)}")
+        return {"error": "ALPHAVANTAGE_API_KEY missing", "alphavantage": {"error": "Missing API key"}}
+    
+    insider_data = {
+        "finnhub": {"trades": 0, "sentiment": 0.0},
+        "alphavantage": {"trades": 0, "sentiment": 0.0}
+    }
+    
+    # Finnhub insider transactions
+    try:
+        url = f"https://finnhub.io/api/v1/stock/insider-transactions"
+        params = {"symbol": ticker, "token": finnhub_api_key}
+        print(f"[DEBUG] Calling Finnhub API for {ticker}")
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if "data" not in data:
+            print(f"[DEBUG] Finnhub response missing 'data' field: {data}")
+            insider_data["finnhub"]["error"] = f"Unexpected response format: {data}"
+        else:
+            from datetime import datetime, timedelta
+            transactions = data.get("data", [])
+            ninety_days_ago = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+            
+            # Finnhub returns transactionDate as YYYY-MM-DD string
+            recent_trades = [t for t in transactions if t.get("transactionDate", "0000-00-00") >= ninety_days_ago]
+            
+            print(f"[DEBUG] Finnhub raw transaction sample: {transactions[0] if transactions else 'No transactions'}")
+            
+            if recent_trades:
+                # Check for buys (positive change) and sells (negative change)
+                buys = sum(1 for t in recent_trades if t.get("change") and float(t.get("change", 0)) > 0)
+                sells = sum(1 for t in recent_trades if t.get("change") and float(t.get("change", 0)) < 0)
+                insider_data["finnhub"]["trades"] = len(recent_trades)
+                insider_data["finnhub"]["sentiment"] = round((buys - sells) / len(recent_trades), 3) if recent_trades else 0.0
+                print(f"[DEBUG] Finnhub: {len(recent_trades)} trades found ({buys} buys, {sells} sells)")
+            else:
+                print(f"[DEBUG] Finnhub: No recent trades found in last 90 days (cutoff: {ninety_days_ago})")
+                insider_data["finnhub"]["info"] = "No recent trades found"
+    except requests.exceptions.Timeout:
+        error_msg = "Finnhub API request timed out (10s timeout)"
+        print(f"[ERROR] {error_msg}")
+        insider_data["finnhub"]["error"] = error_msg
+    except requests.exceptions.HTTPError as e:
+        error_msg = f"Finnhub API HTTP error: {e.response.status_code} - {e.response.text}"
+        print(f"[ERROR] {error_msg}")
+        insider_data["finnhub"]["error"] = error_msg
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Finnhub API request failed: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        insider_data["finnhub"]["error"] = error_msg
+    except Exception as e:
+        error_msg = f"Finnhub analysis failed: {type(e).__name__}: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        insider_data["finnhub"]["error"] = error_msg
+    
+    # Alpha Vantage insider transactions
+    try:
+        url = f"https://www.alphavantage.co/query"
+        params = {
+            "function": "INSIDER_TRANSACTIONS",
+            "symbol": ticker,
+            "apikey": alpha_vantage_key
+        }
+        print(f"[DEBUG] Calling Alpha Vantage API for {ticker}")
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if "data" not in data:
+            print(f"[DEBUG] Alpha Vantage response missing 'data' field: {data}")
+            insider_data["alphavantage"]["error"] = f"Unexpected response format or rate limit: {data.get('Note', data.get('Information', 'Unknown'))}"
+        else:
+            from datetime import datetime, timedelta
+            transactions = data.get("data", [])
+            # Alpha Vantage uses YYYY-MM-DD format
+            ninety_days_ago = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+            recent_trades = [t for t in transactions if t.get("transaction_date", "0000-00-00") >= ninety_days_ago]
+            
+            print(f"[DEBUG] Alpha Vantage raw transaction sample: {transactions[0] if transactions else 'No transactions'}")
+            
+            if recent_trades:
+                # Alpha Vantage uses "A" for Acquisition (buy) and "D" for Disposal (sell)
+                buys = sum(1 for t in recent_trades if t.get("acquisition_or_disposal", "").upper() == "A")
+                sells = sum(1 for t in recent_trades if t.get("acquisition_or_disposal", "").upper() == "D")
+                insider_data["alphavantage"]["trades"] = len(recent_trades)
+                insider_data["alphavantage"]["sentiment"] = round((buys - sells) / len(recent_trades), 3) if recent_trades else 0.0
+                print(f"[DEBUG] Alpha Vantage: {len(recent_trades)} trades found ({buys} acquisitions, {sells} disposals)")
+                print(f"[DEBUG] Alpha Vantage acquisition_or_disposal values: {set(t.get('acquisition_or_disposal') for t in recent_trades[:5])}")
+            else:
+                print(f"[DEBUG] Alpha Vantage: No recent trades found in last 90 days (cutoff: {ninety_days_ago})")
+                insider_data["alphavantage"]["info"] = "No recent trades found"
+    except requests.exceptions.Timeout:
+        error_msg = "Alpha Vantage API request timed out (10s timeout)"
+        print(f"[ERROR] {error_msg}")
+        insider_data["alphavantage"]["error"] = error_msg
+    except requests.exceptions.HTTPError as e:
+        error_msg = f"Alpha Vantage API HTTP error: {e.response.status_code} - {e.response.text}"
+        print(f"[ERROR] {error_msg}")
+        insider_data["alphavantage"]["error"] = error_msg
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Alpha Vantage API request failed: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        insider_data["alphavantage"]["error"] = error_msg
+    except Exception as e:
+        error_msg = f"Alpha Vantage analysis failed: {type(e).__name__}: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        insider_data["alphavantage"]["error"] = error_msg
+    
+    return insider_data
+
+
+def _calculate_aggregate_score(sentiment_data: Dict[str, Any], insider_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Calculate aggregate company intelligence score."""
+    scores = []
+    weights = []
+    
+    # NYT sentiment (40% weight)
+    if "sentiment_score" in sentiment_data:
+        scores.append(sentiment_data["sentiment_score"])
+        weights.append(0.4)
+    
+    # Finnhub insider sentiment (30% weight)
+    if "finnhub" in insider_data and "sentiment" in insider_data["finnhub"]:
+        scores.append(insider_data["finnhub"]["sentiment"])
+        weights.append(0.3)
+    
+    # Alpha Vantage insider sentiment (30% weight)
+    if "alphavantage" in insider_data and "sentiment" in insider_data["alphavantage"]:
+        scores.append(insider_data["alphavantage"]["sentiment"])
+        weights.append(0.3)
+    
+    if scores:
+        weighted_score = sum(s * w for s, w in zip(scores, weights)) / sum(weights)
+    else:
+        weighted_score = 0.0
+    
+    return {
+        "aggregate_score": round(weighted_score, 3),
+        "score_label": "Bullish" if weighted_score > 0.15 else "Bearish" if weighted_score < -0.15 else "Neutral",
+        "confidence": "High" if len(scores) >= 2 else "Medium" if len(scores) == 1 else "Low"
+    }
+
+
+def _get_company_intelligence(company_name: str, ticker: str = None) -> Dict[str, Any]:
+    """Perform comprehensive company intelligence analysis."""
+    sentiment_data = _get_nyt_sentiment(company_name)
+    insider_data = _get_insider_trading_sentiment(ticker or company_name)
+    aggregate = _calculate_aggregate_score(sentiment_data, insider_data)
+    
+    return {
+        "company": company_name,
+        "ticker": ticker,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "news_sentiment": sentiment_data,
+        "insider_trading": insider_data,
+        "aggregate_analysis": aggregate
+    }
+
+
 def _get_tool_definitions() -> Dict[str, Dict[str, Any]]:
     """Define available tools with schemas."""
     return {
@@ -72,7 +310,7 @@ def _get_tool_definitions() -> Dict[str, Dict[str, Any]]:
             "parameters": {
                 "book": {"type": "string", "description": "Book/portfolio identifier"},
                 "metric": {"type": "string", "description": "Metric name (VaR, Exposure, PnL)"},
-                "window": {"type": "string", "description": "Time window (30m, 1h, 1d)", "default": "30m"}
+                "window": {"type": "string", "description": "Time window (30m, 1h, 1d)"}
             },
             "required": ["book", "metric"]
         },
@@ -109,6 +347,14 @@ def _get_tool_definitions() -> Dict[str, Dict[str, Any]]:
             },
             "required": ["reason"],
             "requires_confirm": True
+        },
+        "company_intelligence": {
+            "description": "Get real-time company intelligence including news sentiment analysis from NYT, insider trading activity from Finnhub and Alpha Vantage, and aggregate sentiment score",
+            "parameters": {
+                "company_name": {"type": "string", "description": "Company name to analyze"},
+                "ticker": {"type": "string", "description": "Stock ticker symbol (optional, e.g., 'AAPL')"}
+            },
+            "required": ["company_name"]
         }
     }
 
@@ -128,6 +374,9 @@ def _execute_tool(tool_name: str, args: Dict[str, Any], user_id: str) -> Any:
         elif tool_name == "get_runbook":
             scenario = args.get("scenario", "")
             return runbooks.get_runbook(scenario)
+
+        elif tool_name == "company_intelligence":
+            return _get_company_intelligence(**args)
 
         elif tool_name == "halt_trading":
             # This should be confirmed first, but execute if called

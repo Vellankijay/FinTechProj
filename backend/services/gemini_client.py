@@ -15,8 +15,8 @@ def _get_gemini_model():
     """Initialize Gemini model with API key."""
     api_key = vault("GEMINI_API_KEY", required=True)
     genai.configure(api_key=api_key)
-    # Using gemini-2.0-flash-exp (experimental but works with your API key)
-    return genai.GenerativeModel('gemini-2.5-flash')
+    # Using gemini-1.5-flash (no daily request limit, 1000 RPM)
+    return genai.GenerativeModel('gemini-2.5-flash-lite')
 
 
 # ---------------------------------------------------------
@@ -121,21 +121,28 @@ You can call the following tools to help answer questions:
                 generation_config=generation_config
             )
 
-        # Parse tool calls
+        # Parse tool calls and text from all parts
         tool_calls = []
+        text_parts = []
+        
         if getattr(response, "candidates", None):
             candidate = response.candidates[0]
             if getattr(candidate, "content", None) and getattr(candidate.content, "parts", None):
                 for part in candidate.content.parts:
+                    # Check for tool calls
                     if getattr(part, "function_call", None):
                         fc = part.function_call
                         tool_calls.append(ToolCall(
                             name=fc.name,
                             args=dict(fc.args) if fc.args else {}
                         ))
+                    # Check for text
+                    elif getattr(part, "text", None):
+                        text_parts.append(part.text)
 
-        # Parse text response
-        text_response = getattr(response, "text", "")
+        # Combine all text parts
+        text_response = " ".join(text_parts) if text_parts else ""
+        
         if not text_response:
             if tool_calls:
                 text_response = "Let me check that for you..."
@@ -177,10 +184,19 @@ def continue_with_tool_result(
     Returns:
         GeminiResponse with final text
     """
+    try:
+        # Safely serialize tool result to JSON
+        if isinstance(tool_result, str):
+            result_json = tool_result
+        else:
+            result_json = json.dumps(tool_result, default=str)
+    except Exception as e:
+        result_json = f"Tool execution result (serialization error: {str(e)})"
+
     messages = previous_messages + [
         {
             "role": "assistant",
-            "content": f"[Tool {tool_name} executed with result: {json.dumps(tool_result)}]"
+            "content": f"[Tool {tool_name} executed with result: {result_json}]"
         },
         {
             "role": "user",
