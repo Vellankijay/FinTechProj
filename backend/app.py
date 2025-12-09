@@ -12,7 +12,7 @@ from .routers import server, health  # This imports your tech portfolio router
 from .infra.secrets import get_config
 
 # Load environment variables from .env file
-env_path = Path(__file__).parent.parent / '.env'
+env_path = Path(__file__).parent / '.env'
 # print(env_path)
 load_dotenv(dotenv_path=env_path)
 

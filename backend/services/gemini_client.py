@@ -16,7 +16,7 @@ def _get_gemini_model():
     api_key = vault("GEMINI_API_KEY", required=True)
     genai.configure(api_key=api_key)
     # Using gemini-2.0-flash-exp (experimental but works with your API key)
-    return genai.GenerativeModel('gemini-2.0-flash-exp')
+    return genai.GenerativeModel('gemini-2.5-flash')
 
 
 # ---------------------------------------------------------
@@ -33,12 +33,18 @@ def _convert_tool_to_gemini_schema(tool_name: str, tool_info: Dict[str, Any]) ->
     Returns:
         Dictionary representing Gemini-compatible function declaration
     """
+    # Clean up properties to remove unsupported Gemini schema fields
+    properties = {}
+    for param_name, param_def in tool_info.get("parameters", {}).items():
+        cleaned_param = {k: v for k, v in param_def.items() if k not in ["default", "examples"]}
+        properties[param_name] = cleaned_param
+    
     return {
         "name": tool_name,
         "description": tool_info.get("description", ""),
         "parameters": {
             "type": "object",
-            "properties": tool_info.get("parameters", {}),
+            "properties": properties,
             "required": tool_info.get("required", [])
         }
     }
@@ -106,7 +112,8 @@ You can call the following tools to help answer questions:
             response = model.generate_content(
                 full_prompt,
                 tools=[{"function_declarations": gemini_tools}],
-                generation_config=generation_config
+                generation_config=generation_config,
+                safety_settings=[]
             )
         else:
             response = model.generate_content(
